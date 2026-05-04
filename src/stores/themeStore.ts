@@ -3,10 +3,10 @@ import { create } from 'zustand';
 export const themes = [
   'light',
   'dark',
-  'cupcake',
+  /*'cupcake',
   'bumblebee',
   'emerald',
-  'corporate',
+  'corporate',*/
 ];
 
 interface ThemeState {
@@ -31,6 +31,15 @@ export const useThemeStore = create<ThemeState>((set) => ({
     // 다음 인덱스 계산 (마지막이면 다시 0으로)
     const nextIndex = (currentIndex + 1) % themes.length;
     setTheme(themes[nextIndex]);
+  },
+
+  toggleTheme: () => {
+    set((state) => {
+      const next = state.theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', next);
+      document.documentElement.setAttribute('data-theme', next);
+      return { theme: next };
+    });
   },
 }));
 

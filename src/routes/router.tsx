@@ -7,6 +7,8 @@ import RootLayout from '@/components/layout/RootLayout.tsx';
 
 const LoadingComponent = <Loading />;
 const Index = lazy(() => import('@/pages/Index'));
+const Home = lazy(() => import('@/pages/Home'));
+const About = lazy(() => import('@/pages/About'));
 
 const router = createBrowserRouter([
   {
@@ -22,6 +24,22 @@ const router = createBrowserRouter([
             element: (
               <Suspense fallback={LoadingComponent}>
                 <Index />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'home',
+            element: (
+              <Suspense fallback={LoadingComponent}>
+                <Home />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'about',
+            element: (
+              <Suspense fallback={LoadingComponent}>
+                <About />
               </Suspense>
             ),
           },
