@@ -21,6 +21,18 @@
     width: 24px;
 }
 
+.navbar {
+    position: relative;
+}
+
+.navbar-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    flex: none;
+}
+
+
 @theme {
     --font-sans: 'Pretendard', sans-serif;
     --font-serif: 'Pretendard', serif;
