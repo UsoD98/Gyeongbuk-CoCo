@@ -27,6 +27,7 @@ export default function Layout() {
           'px-4' /*모바일 환경에서 좌우 여백 16px*/,
           'lg:px-10' /*데스크톱 환경에서 좌우 여백 40px*/,
           'py-6' /*상하 여백 24px*/,
+          'bg-[#F8F9FF]',
         )}
       >
         <Outlet />
