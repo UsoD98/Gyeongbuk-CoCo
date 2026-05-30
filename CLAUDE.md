@@ -85,3 +85,5 @@ src/
 - 변경 이력: [CHANGELOG.md](./CHANGELOG.md)
 - 아키텍처 의사결정 기록: [docs/adr/](./docs/adr/)
 - 초기 셋업 가이드: [docs/settings.md](./docs/settings.md)
+
+문서 자동화: 커밋 시 `.claude/hooks/check-docs.mjs`(PreToolUse 게이트)가 문서 누락을 점검하고, `/sync-docs` 스킬이 변경을 분석해 CHANGELOG·ADR 등을 갱신한다.

@@ -65,6 +65,7 @@ git push -u origin feature/planner-date-range
 - [ ] 새 의존성: `package.json` + `package-lock.json` 동시 커밋
 - [ ] `.env*` 등 비공개 파일 미포함
 - [ ] 신규 패턴/디자인 토큰을 도입했다면 관련 문서(CONVENTION/DESIGN) 동시 갱신
+- [ ] 문서 갱신이 막막하면 `/sync-docs` 스킬로 CHANGELOG·ADR 초안 생성 (커밋 시 `check-docs` 훅이 누락을 점검)
 
 ---
 
