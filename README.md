@@ -90,6 +90,7 @@ src/
 
 | 문서 | 내용 |
 | --- | --- |
+| [docs/PRD.md](./docs/PRD.md) | 제품 기획서 (제안서 기반 비전·기능·데이터 활용) |
 | [CLAUDE.md](./CLAUDE.md) | Claude Code 작업 지침 (AI 우선) |
 | [CONVENTION.md](./CONVENTION.md) | 코딩 컨벤션 (네이밍·임포트·금지 패턴) |
 | [DESIGN.md](./DESIGN.md) | 디자인 시스템 (색·타이포·컴포넌트 패턴) |

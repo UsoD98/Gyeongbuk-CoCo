@@ -54,3 +54,7 @@ ADR은 *"나중에 왜 이렇게 했지?"*에 답하기 위한 문서다. 결정
 | [0004](./0004-router-domain-spread-pattern.md) | 라우터는 도메인별 RouteObject[] spread로 합성 | Accepted |
 | [0005](./0005-absolute-imports-via-at-alias.md) | 절대 경로 `@/` 별칭 강제 | Accepted |
 | [0006](./0006-kakao-login-via-react-kakao-login.md) | 카카오 OAuth는 react-kakao-login 사용 | Accepted |
+| [0007](./0007-backend-db-ownership.md) | 백엔드/DB 소유 주체와 데이터 수집 위치 | Accepted |
+| [0008](./0008-party-size-input-model.md) | 인원 입력 모델 — 버킷 vs 자유 카운터 | Accepted |
+| [0009](./0009-shared-course-persistence.md) | 공유 코스 영속성 — URL vs 서버 저장 | Accepted |
+| [0010](./0010-auth-gating-policy.md) | 인증 게이팅 정책 (저장·공유 로그인) | Accepted |
