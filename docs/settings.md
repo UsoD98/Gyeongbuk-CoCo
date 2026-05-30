@@ -1,5 +1,12 @@
 # Vite + React + TypeScript + Tailwind + DaisyUI + lucide-react 프로젝트 설정 가이드
 
+> 본 문서는 본 프로젝트와 동일한 스택을 **새로 시작**할 때의 단계별 가이드다.
+> 현재 저장소의 *현행 구조·규약*은 다음 문서를 본다:
+> - 아키텍처·작업 지침: [../CLAUDE.md](../CLAUDE.md)
+> - 코딩 컨벤션: [../CONVENTION.md](../CONVENTION.md)
+> - 디자인 시스템: [../DESIGN.md](../DESIGN.md)
+> - 의사결정 기록: [./adr/](./adr/)
+
 ## 1) 절대 경로 설정: `@`
 
 우선 절대 경로 설정을 위해 @types/node 패키지를 개발 의존성으로 설치합니다.
@@ -53,7 +60,7 @@ export default defineConfig({
 Tailwind CSS와 daisyUI, lucide-react 아이콘 라이브러리를 설치합니다.
 
 ```bash
-npm install tailwindcss@latest @tailwindcss/vite@latest daisyui@ lucide-react
+npm install tailwindcss@latest @tailwindcss/vite@latest daisyui@latest lucide-react
 ```
 
 그리고 `src/index.css` 파일에서 Tailwind와 daisyUI를 불러옵니다.
@@ -141,29 +148,26 @@ npm install -D prettier prettier-plugin-tailwindcss
 
 ```json
 {
-  "plugins": [
-    "prettier-plugin-tailwindcss"
-  ],
-  // Tailwind CSS 클래스 정렬 플러그인 추가
-  "tailwindConfig": "./tailwind.config.js",
-  // Tailwind CSS 설정 파일 경로 지정
+  "plugins": ["prettier-plugin-tailwindcss"],
   "tailwindStylesheet": "./src/index.css",
-  // Tailwind CSS가 포함된 스타일시트 경로 지정
   "singleQuote": true,
-  // 문자열을 작은따옴표로 감싸도록 설정
   "semi": true,
-  // 문장 끝에 세미콜론을 추가하도록 설정
   "trailingComma": "all"
-  // 여러 줄에서 마지막 요소 뒤에 쉼표를 추가하도록 설정
 }
 ```
 
+각 옵션의 의미:
+
+- `plugins` — Tailwind 클래스 정렬 플러그인 등록.
+- `tailwindStylesheet` — Tailwind v4에선 설정이 CSS 안의 `@theme`/`@plugin`으로 들어가므로, 플러그인이 클래스 정렬 기준을 잡을 수 있도록 **스타일시트 경로**를 가리킨다. v3 시절의 `tailwindConfig: "./tailwind.config.js"` 옵션은 v4에선 사용하지 않는다 (config 파일 자체가 없다).
+- `singleQuote` — 작은따옴표.
+- `semi` — 세미콜론 사용.
+- `trailingComma: "all"` — 가능한 곳마다 후행 쉼표.
+
 ### 확인 포인트
 
-- `prettier-plugin-tailwindcss` 플러그인을 사용하여 Tailwind CSS 클래스 이름이 자동으로 정렬되고 줄바꿈되도록 설정합니다.
-- `tailwindConfig`와 `tailwindStylesheet` 옵션을 통해 Prettier가 Tailwind CSS 설정 파일과 스타일시트를 인식하도록 지정합니다.
-- Prettier의 다른 설정(`singleQuote`, `semi`, `trailingComma`)도 프로젝트의 코드 스타일에 맞게 조정할 수 있습니다.
-- 이제 Prettier를 사용하여 코드를 포맷할 때 Tailwind CSS 클래스 이름이 자동으로 정렬되고 줄바꿈되어 가독성이 향상됩니다.
+- `prettier-plugin-tailwindcss`가 활성화되면 저장 시 클래스 순서가 자동 정렬된다 — 수동 정렬 금지.
+- `.prettierrc`는 표준 JSON이므로 `//` 주석을 넣을 수 없다. 설명이 필요하면 본 문서나 PR에 적는다.
 
 ## 6) 레이아웃 및 라우터 설정
 
@@ -176,40 +180,40 @@ npm install react-router-dom
 그리고 `src/routes/router.tsx` 파일에서 라우터 설정을 추가합니다.
 
 ```tsx
-import {createBrowserRouter, RouterProvider} from 'react-router-dom';
-import {lazy, Suspense} from "react";
-import Layout from "@/components/layout/Layout.tsx";
-import Loading from "@/components/common/Loading.tsx";
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import Layout from '@/components/layout/Layout.tsx';
+import Loading from '@/components/common/Loading.tsx';
 import NotFound from '@/components/layout/NotFoundLayout.tsx';
-import RootLayout from '@/components/layout/RootLayout.tsx';
 
-const LoadingComponent = <Loading/>;
-const Index = lazy(() => import('@/pages/Index'))
+const LoadingComponent = <Loading />;
+const Index = lazy(() => import('@/pages/Index'));
 
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout/>,
+    element: <Layout />,
+    errorElement: <NotFound />,
     children: [
       {
-        element: <RootLayout/>,
-        errorElement: <NotFound/>,
-        children: [
-          {
-            index: true,
-            element: <Suspense fallback={LoadingComponent}><Index/></Suspense>,
-          },
-        ]
-
-      }
-    ]
-  }
+        index: true,
+        element: (
+          <Suspense fallback={LoadingComponent}>
+            <Index />
+          </Suspense>
+        ),
+      },
+    ],
+  },
 ]);
 
 export default function AppRouter() {
-  return <RouterProvider router={router}/>;
+  return <RouterProvider router={router} />;
 }
 ```
+
+> 현행 본 저장소는 도메인별 라우터(`<domain>Router.tsx`)를 만들고 루트에서 `...spread`로 합성한다.
+> 자세한 패턴은 [ADR 0004](./adr/0004-router-domain-spread-pattern.md) 참고. `RootLayout`은 도메인별 중간 레이아웃이 필요해질 때 활용할 placeholder로 남겨두었다.
 
 이제 `src/App.tsx` 파일에서 라우터를 불러와 애플리케이션의 루트 컴포넌트로 설정합니다.
 
@@ -228,7 +232,7 @@ export default function App() {
 - `Lazy`를 사용하여 라우트 컴포넌트를 동적으로 불러와 초기 로딩 시간을 줄입니다.
 - 각 path에 대한 레이아웃과 에러 페이지를 설정하여 사용자 경험을 향상시킵니다.
 - `children` 배열을 사용하여 중첩된 라우트를 설정할 수 있습니다. 예를 들어, `/about` 경로를 추가하려면 `children` 배열에 새로운 객체를 추가하면 됩니다.
-- `children` 내에서도 새로운 {any}router.tsx 파일을 만들어 라우팅 설정을 분리할 수 있습니다. 예를 들어, `src/routes/userRouter.tsx` 파일을 만들어 `/user` 경로에
+- `children` 내에서도 새로운 `<domain>Router.tsx` 파일을 만들어 라우팅 설정을 분리할 수 있습니다. 예를 들어, `src/routes/userRouter.tsx` 파일을 만들어 `/user` 경로에
   대한 라우팅 설정을 추가할 수 있습니다.
 
 router 설정에 포함되는 레이아웃 및 Index 페이지 컴포넌트는 각각 구현하시면 됩니다. 이제 라우팅이 설정된 React 애플리케이션을 개발할 수 있습니다.
@@ -246,9 +250,9 @@ daisyUI를 설치하였으니 테마 설정을 상태 관리 라이브러리를 
 `src/stores/themeStore.ts` 파일을 생성하여 테마 상태를 관리하는 Zustand 스토어를 설정합니다.
 
 ```ts
-import {create} from 'zustand'
+import { create } from 'zustand';
 
-export const themes = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate'];
+export const themes = ['light', 'dark'];
 
 interface ThemeState {
   theme: string;
@@ -263,22 +267,25 @@ export const useThemeStore = create<ThemeState>((set) => ({
   setTheme: (theme) => {
     localStorage.setItem('theme', theme);
     document.documentElement.setAttribute('data-theme', theme);
-    set({theme});
+    set({ theme });
   },
 
   nextTheme: () => {
-    const {theme, setTheme} = useThemeStore.getState();
+    const { theme, setTheme } = useThemeStore.getState();
     const currentIndex = themes.indexOf(theme);
     // 다음 인덱스 계산 (마지막이면 다시 0으로)
     const nextIndex = (currentIndex + 1) % themes.length;
     setTheme(themes[nextIndex]);
-  }
+  },
 }));
 
 // 초기 실행 시 스토어 테마 적용
 const savedTheme = localStorage.getItem('theme') || themes[0];
 document.documentElement.setAttribute('data-theme', savedTheme);
 ```
+
+> daisyUI에는 `cupcake`, `bumblebee`, `emerald`, `corporate` 등 추가 테마가 있다.
+> 활성화하려면 ① `src/index.css`의 `@plugin "daisyui/index.js" { themes: ... }` 목록과 ② 위 `themes` 배열에 함께 추가한다. 본 저장소는 light/dark만 노출한다.
 
 `useThemeStore` 훅을 사용하여 현재 테마 상태를 가져오고, `nextTheme` 함수를 호출하여 다음 테마로 전환하는 버튼을 구현합니다. 버튼을 클릭할 때마다 테마가 변경되고, 변경된 테마는 로컬
 스토리지에 저장되어 페이지를 새로고침해도 유지됩니다.
@@ -314,3 +321,17 @@ export default function Index() {
 - `data-theme` 속성을 사용하여 daisyUI의 테마를 적용합니다. 이를 통해 Tailwind CSS와 daisyUI의 스타일이 자동으로 변경됩니다.
 - Zustand 스토어는 다른 상태 관리에도 활용할 수 있으므로, 테마 외에도 애플리케이션의 다른 상태를 관리하는 데 사용할 수 있습니다.
 - 예를 들어, 사용자 인증 상태, 애플리케이션 설정 등을 Zustand 스토어로 관리할 수 있습니다.
+
+---
+
+## 8) 그 다음 단계
+
+본 가이드는 *기본 스택 셋업*까지를 다룬다. 본 저장소에 이미 적용된 추가 항목은 다음과 같다 — 새 환경에 도입할 땐 코드와 ADR을 참고한다.
+
+- **HTTP 클라이언트(axios)** — `src/api/`에 도메인별 모듈을 두고 공용 인스턴스에서 베이스 URL·인터셉터를 관리. 환경 변수는 `VITE_` 접두사.
+- **카카오 OAuth(`react-kakao-login`)** — JS 키를 `.env.development`의 `VITE_KAKAO_JAVASCRIPT_KEY`로 주입. 결정 배경은 [ADR 0006](./adr/0006-kakao-login-via-react-kakao-login.md).
+- **날짜 입력** — `react-datepicker` (범위 선택). 라이브러리 CSS는 사용 컴포넌트에서 1회 import.
+- **아이콘** — `lucide-react`. 기본 크기 `size={20}`.
+- **ESLint** — `js.recommended`, `tseslint.recommended`, `react-hooks.flat.recommended`, `react-refresh.vite`. 도메인 라우터 파일 상단의 `/* eslint-disable react-refresh/only-export-components */`는 의도된 disable이다.
+
+새 패턴/도구를 도입한 뒤에는 [CONVENTION.md](../CONVENTION.md)와 본 문서, 필요하면 새 ADR을 함께 갱신한다.
