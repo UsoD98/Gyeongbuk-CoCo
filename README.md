@@ -93,6 +93,7 @@ src/
 | [CONVENTION.md](./CONVENTION.md) | 코딩 컨벤션 (네이밍·임포트·금지 패턴) |
 | [DESIGN.md](./DESIGN.md) | 디자인 시스템 (색·타이포·컴포넌트 패턴) |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 브랜치 전략·커밋·PR 규칙 |
+| [docs/git-workflow.md](./docs/git-workflow.md) | Git 워크플로우 치트시트 (복붙용 명령) |
 
 ## 라이선스
 
