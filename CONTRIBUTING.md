@@ -150,7 +150,7 @@ BREAKING CHANGE: themeStore가 'system' 테마를 더 이상 제공하지 않음
 - [ ] `npm run lint`
 - [ ] `npm run build`
 - [ ] 모바일/데스크톱 UI 확인 (스크린샷 첨부)
-- [ ] 문서 갱신: <CONVENTION/DESIGN/CHANGELOG/ADR — 해당 항목>
+- [ ] 문서 갱신: <CONVENTION/DESIGN — 해당 항목>
 
 ## 스크린샷 / 영상
 <UI 변경 시 필수>
@@ -170,7 +170,6 @@ BREAKING CHANGE: themeStore가 'system' 테마를 더 이상 제공하지 않음
 ### 머지 후
 
 - 머지된 브랜치는 곧바로 삭제.
-- 사용자 영향이 있으면 [CHANGELOG.md](./CHANGELOG.md)의 `[Unreleased]` 섹션에 항목 추가.
 
 ---
 
@@ -180,13 +179,12 @@ BREAKING CHANGE: themeStore가 'system' 테마를 더 이상 제공하지 않음
 
 1. `release/x.y.z` 브랜치를 `develop`에서 분기.
 2. 버전 번호 업데이트 (`package.json`).
-3. `CHANGELOG.md`의 `[Unreleased]` 섹션을 `[x.y.z] - YYYY-MM-DD`로 확정.
-4. QA 통과 후 `main`으로 PR, 머지 후 태그.
+3. QA 통과 후 `main`으로 PR, 머지 후 태그.
    ```bash
    git tag -a v0.2.0 -m "Release 0.2.0"
    git push origin v0.2.0
    ```
-5. `release/x.y.z` → `develop` 역병합.
+4. `release/x.y.z` → `develop` 역병합.
 
 ---
 
@@ -198,7 +196,7 @@ npm install -D <pkg>       # 개발 도구
 ```
 
 - 도입 근거를 PR 본문에 적는다 (대안·번들 크기·유지보수성).
-- 큰 결정(상태 관리, 라우터, 스타일 시스템 등)은 [ADR](./docs/adr/)에 별도 항목으로 남긴다.
+- 상태 관리·라우터·스타일 시스템 같은 큰 결정은 PR 본문에 배경·대안을 충분히 남긴다.
 
 ---
 
@@ -206,4 +204,3 @@ npm install -D <pkg>       # 개발 도구
 
 - 버그: 재현 단계 / 기대 결과 / 실제 결과 / 환경(브라우저·해상도) 명시.
 - 기능 제안: 사용자 시나리오 + 대안 검토 결과.
-- "왜 이렇게 되어 있어?" 질문은 [docs/adr/](./docs/adr/) 먼저 확인.

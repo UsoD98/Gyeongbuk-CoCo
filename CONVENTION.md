@@ -43,43 +43,9 @@ const hasError = false;
 const handleSubmit = () => {};
 ```
 
-### 1.3 브랜치
+### 1.3 브랜치 · 커밋 메시지
 
-`<type>/<scope>-<짧은-설명>` (kebab-case).
-
-- `feat/planner-date-range`
-- `fix/auth-kakao-token-storage`
-- `chore/eslint-rule-tuning`
-- `refactor/router-domain-split`
-
-### 1.4 커밋 메시지
-
-Conventional Commits 변형. 한국어 본문.
-
-```
-<type>(<scope>) <설명>
-```
-
-type: `feat`, `fix`, `refactor`, `style`, `docs`, `chore`, `test`, `perf`, `build`, `ci`.
-scope: 영역 키워드 — `design`, `auth`, `planner`, `collection`, `routes`, `theme`, `layout`, `deps` 등. scope 생략 가능.
-
-**Good**
-
-```
-feat(planner) 일정 선택 DatePicker 통합
-fix(auth) 카카오 access_token 만료 시 재로그인 처리
-chore(deps) react 19.2 → 19.3 업그레이드
-```
-
-**Bad**
-
-```
-update                    # type 없음, 무엇을 한 건지 불명
-feat: 작업                # scope 생략은 OK지만 설명이 비어 있음
-WIP                       # 의미 없음
-```
-
-상세 PR 규칙은 [CONTRIBUTING.md](./CONTRIBUTING.md) 참고.
+브랜치 네이밍(`<type>/<scope>-<설명>`)과 커밋 메시지(`<type>(<scope>) <설명>`) 규칙은 프로세스 문서인 [CONTRIBUTING.md](./CONTRIBUTING.md)에 단일 정의한다 (type·scope 목록, 예시, Breaking Change 포함). 여기서 중복 기술하지 않는다.
 
 ---
 
@@ -346,7 +312,7 @@ const res = await axios.create({ baseURL: '...' }).post('/auth/kakao', {});
 - 다음 경우에만 주석:
   - 코드만 봐서는 알 수 없는 **이유**(외부 제약, 버그 우회, 의도된 disable 등).
   - 매직 넘버·매직 색상의 출처(피그마 기준값 등).
-- 변경 이력·작성자·날짜는 주석에 적지 않는다 — `git log`·CHANGELOG로.
+- 변경 이력·작성자·날짜는 주석에 적지 않는다 — `git log`로.
 
 ```tsx
 // Good — 왜 disable인지 짧게

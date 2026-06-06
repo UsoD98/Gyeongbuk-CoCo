@@ -27,8 +27,6 @@
 | 날짜 | react-datepicker, react-day-picker |
 | 린트·포맷 | ESLint 10, Prettier 3, prettier-plugin-tailwindcss |
 
-선택 근거는 [`docs/adr/`](./docs/adr/) 에 정리.
-
 ## 요구 환경
 
 - **Node.js** ≥ 20 (Vite 8 권장)
@@ -95,9 +93,6 @@ src/
 | [CONVENTION.md](./CONVENTION.md) | 코딩 컨벤션 (네이밍·임포트·금지 패턴) |
 | [DESIGN.md](./DESIGN.md) | 디자인 시스템 (색·타이포·컴포넌트 패턴) |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 브랜치 전략·커밋·PR 규칙 |
-| [CHANGELOG.md](./CHANGELOG.md) | 버전별 변경 이력 |
-| [docs/settings.md](./docs/settings.md) | 초기 셋업 단계별 가이드 |
-| [docs/adr/](./docs/adr/) | 아키텍처 의사결정 기록 |
 
 ## 라이선스
 

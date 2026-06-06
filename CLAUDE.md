@@ -82,6 +82,3 @@ src/
 - 코딩 컨벤션 상세: [CONVENTION.md](./CONVENTION.md)
 - 디자인 시스템(색·타이포·컴포넌트 패턴): [DESIGN.md](./DESIGN.md)
 - 기여 절차·브랜치 전략·PR 규칙: [CONTRIBUTING.md](./CONTRIBUTING.md)
-- 변경 이력: [CHANGELOG.md](./CHANGELOG.md)
-- 아키텍처 의사결정 기록: [docs/adr/](./docs/adr/)
-- 초기 셋업 가이드: [docs/settings.md](./docs/settings.md)
