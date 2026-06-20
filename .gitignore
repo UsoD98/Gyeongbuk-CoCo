@@ -40,3 +40,4 @@ Desktop.ini
 *.sw?
 
 docs/sample.html
+docs/guide/*
