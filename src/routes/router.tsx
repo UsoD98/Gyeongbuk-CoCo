@@ -13,6 +13,7 @@ const Home = lazy(() => import('@/pages/Home'));
 const About = lazy(() => import('@/pages/About'));
 
 const router = createBrowserRouter([
+  ...authRouter,
   {
     path: '/',
     element: <Layout />,
@@ -42,7 +43,6 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      ...authRouter,
       ...plannerRouter,
       ...collectionRouter,
     ],

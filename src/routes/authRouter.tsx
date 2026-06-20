@@ -2,6 +2,7 @@
 
 import { lazy, Suspense } from 'react';
 import { Navigate, type RouteObject } from 'react-router-dom';
+
 import Loading from '@/components/common/Loading.tsx';
 
 const LoadingComponent = <Loading />;
@@ -10,7 +11,7 @@ const Register = lazy(() => import('@/pages/Auth/Register'));
 
 const authRouter: RouteObject[] = [
   {
-    path: 'auth/',
+    path: 'auth',
     children: [
       {
         index: true,
