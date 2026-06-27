@@ -49,6 +49,12 @@
     --color-primary-800: #004545;
     --color-primary-900: #002E2E;
 
+    /* POI 카테고리 색 (플래너 배지·마커·예산 막대) */
+    --color-cat-sight: #0E9E96;
+    --color-cat-food: #E8730C;
+    --color-cat-stay: #7C5CFF;
+    --color-cat-culture: #2D74E0;
+
     /* secondary */
     --color-secondary-50:  #fffde7;
     --color-secondary-100: #fff9c4;
@@ -74,4 +80,25 @@
     .react-datepicker__current-month {
         color: var(--color-primary-50) !important;
     }
+}
+
+/* 플래너 오버레이 등장 모션. motion-safe:animate-[coco-*] 로 소비한다. */
+@keyframes coco-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes coco-pop {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes coco-slide-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes coco-slide-in-right {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: none; }
 }
