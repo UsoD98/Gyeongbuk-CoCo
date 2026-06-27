@@ -180,6 +180,27 @@ btn-ghost btn-sm          아이콘 버튼 (네비게이션 우측)
 
 `src/components/common/Loading.tsx`. 인디고 spin SVG + 한국어 메시지("데이터를 불러오는 중입니다…"). Suspense fallback으로 사용.
 
+### 6.7 오버레이·모션·시맨틱 색 (플래너 기준)
+
+플래너(`components/planner/`)에서 확립한 패턴. 다른 도메인도 동일 규칙을 따른다.
+
+**시맨틱 색 (테마 가변성 필수).** 카드·텍스트에 `bg-white`·`text-gray-*` 같은 고정색을 쓰지 말 것. light/dark가 모두 깨지지 않도록 daisyUI 시맨틱 토큰을 쓴다.
+
+| 용도 | 고정색(금지) | 시맨틱 토큰(사용) |
+| --- | --- | --- |
+| 카드/패널 배경 | `bg-white` | `bg-base-100` |
+| 본문 강조 텍스트 | `text-gray-800` | `text-base-content` |
+| 보조 텍스트 | `text-gray-500` | `text-base-content/60` |
+| 마이크로카피 | `text-gray-400` | `text-base-content/50` |
+| 비활성 아이콘 | `text-gray-400` | `text-base-content/40` |
+| 중립 막대/구분 | `bg-gray-400` | `bg-base-content/30` |
+
+> 예외: 평점 별(`fill-amber-400`)은 관례상 두 테마 모두 amber 유지. SVG 플레이스홀더 지도 캔버스는 임시 자산이라 고정색 유지.
+
+**등장 모션.** `index.css`에 `@keyframes coco-fade / coco-pop / coco-slide-up / coco-slide-in-right` 정의. 컴포넌트에서 `motion-safe:animate-[coco-*_<dur>_<easing>]`로 소비한다(`prefers-reduced-motion` 자동 존중). 예: 드로어 `motion-safe:animate-[coco-slide-up_0.3s_…] lg:motion-safe:animate-[coco-slide-in-right_…]`, 모달 `coco-pop`, 백드롭 `coco-fade`. 카드 호버는 `transition hover:-translate-y-0.5 hover:shadow-md`.
+
+**오버레이 a11y.** 드로어·모달 패널에 `role="dialog"` + `aria-modal="true"` + `aria-label`, 백드롭 클릭과 함께 **Escape 키 닫기**(`window` keydown `useEffect`) 제공. 아이콘 전용 버튼은 `aria-label` 필수. 카드 전체가 클릭 대상이면 `role="button"` + `tabIndex={0}` + Enter/Space `onKeyDown`로 키보드 접근을 보장한다.
+
 ---
 
 ## 7. 테마

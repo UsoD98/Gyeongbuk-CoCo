@@ -44,10 +44,12 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
+      // 플래너는 게스트 허용(탐색·코스 작성은 비로그인 가능). 저장/공유만 액션 시점 게이트.
+      ...plannerRouter,
       {
         // 로그인 필수 영역. pathless 라우트로 Layout 안에서 가드만 추가한다.
         element: <RequireAuth />,
-        children: [...plannerRouter, ...collectionRouter],
+        children: [...collectionRouter],
       },
     ],
   },
