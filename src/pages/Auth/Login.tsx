@@ -1,9 +1,14 @@
-import { useState, type SubmitEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, type SubmitEvent } from 'react';
+import { useLocation, useNavigate, type Location } from 'react-router-dom';
 
+import { login } from '@/api/auth.ts';
+import { SESSION_FLASH_KEY, type SessionFlash } from '@/api/client.ts';
+import { getApiErrorMessage } from '@/api/types.ts';
 import AuthField from '@/components/auth/AuthField.tsx';
 import AuthScreen from '@/components/auth/AuthScreen.tsx';
 import KakaoLoginComponent from '@/components/auth/KakoLoginComponent.tsx';
+import { useAuthStore } from '@/stores/authStore.ts';
+import { toast } from '@/stores/toastStore.ts';
 import { cn } from '@/utils/cn.ts';
 
 type Errors = {
@@ -12,6 +17,16 @@ type Errors = {
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function readSessionFlash(): SessionFlash | null {
+  const raw = sessionStorage.getItem(SESSION_FLASH_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SessionFlash;
+  } catch {
+    return null; // 손상된 flash는 무시한다.
+  }
+}
 
 function validate(email: string, password: string) {
   const next: Errors = {};
@@ -27,16 +42,47 @@ function validate(email: string, password: string) {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // RequireAuth가 가드로 막을 때 state.from에 원래 가려던 위치를 담아 보낸다.
+  // 로그인 성공 후 그 위치로 복귀하고, 없으면(직접 로그인 진입) 홈으로 간다.
+  const from = (location.state as { from?: Location } | null)?.from;
+  const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Errors>({});
+  const [submitting, setSubmitting] = useState(false);
+  // 세션 만료로 하드 리다이렉트돼 온 경우, 인터셉터가 남긴 1회용 안내·복귀경로를 소비한다.
+  // (풀 리로드로 toast 상태가 날아가므로 여기서 다시 띄운다.)
+  // 복귀경로는 렌더 시점에 순수 read로 한 번 읽어 두고(제거하지 않음),
+  // 안내 toast와 sessionStorage 정리는 effect에서 1회 수행한다.
+  const [returnTo] = useState<string | null>(() => readSessionFlash()?.returnTo ?? null);
+  useEffect(() => {
+    const flash = readSessionFlash();
+    if (!flash) return;
+    sessionStorage.removeItem(SESSION_FLASH_KEY);
+    if (flash.message) toast.error(flash.message);
+  }, []);
 
-  const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
+  const redirectTo =
+    returnTo ?? (from ? from.pathname + from.search + from.hash : '/');
+
+  const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const next = validate(email, password);
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    console.log('Login attempt:', { email, password });
+
+    setSubmitting(true);
+    try {
+      const { accessToken } = await login({ email: email.trim(), password });
+      setAccessToken(accessToken);
+      toast.success('로그인되었습니다.');
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, '로그인에 실패했습니다.'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -58,7 +104,7 @@ export default function Login() {
         </p>
       </div>
 
-      <KakaoLoginComponent />
+      <KakaoLoginComponent redirectTo={redirectTo} />
 
       <div className="text-subtle flex items-center gap-2.5">
         <div className="h-px grow bg-base-300" />
@@ -68,29 +114,35 @@ export default function Login() {
 
       <form className="flex flex-col gap-2.5" onSubmit={handleSubmit}>
         <AuthField
+          id="login-email"
+          name="email"
           icon={<span className="text-subtle">👤</span>}
           placeholder="이메일"
           type="email"
+          autoComplete="email"
           value={email}
           onChange={setEmail}
+          error={errors.email}
         />
-        {errors.email ? (
-          <p className="text-xs text-error">{errors.email}</p>
-        ) : null}
 
         <AuthField
+          id="login-password"
+          name="password"
           icon={<span className="text-subtle">🔒</span>}
           placeholder="비밀번호"
           type="password"
+          autoComplete="current-password"
           value={password}
           onChange={setPassword}
+          error={errors.password}
         />
-        {errors.password ? (
-          <p className="text-xs text-error">{errors.password}</p>
-        ) : null}
 
-        <button type="submit" className={cn('btn w-full btn-outline')}>
-          이메일로 로그인
+        <button
+          type="submit"
+          className={cn('btn w-full btn-outline')}
+          disabled={submitting}
+        >
+          {submitting ? '로그인 중…' : '이메일로 로그인'}
         </button>
       </form>
 

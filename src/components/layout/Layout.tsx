@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Header } from '@/components/layout/HeaderLayout.tsx';
 import { Footer } from '@/components/layout/FooterLayout.tsx';
+import Toaster from '@/components/common/Toaster.tsx';
 import { cn } from '@/utils/cn.ts';
 
 export default function Layout() {
@@ -33,6 +34,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <Footer />
+      <Toaster />
     </div>
   );
 }

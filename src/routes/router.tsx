@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import Layout from '@/components/layout/Layout.tsx';
+import RequireAuth from '@/components/auth/RequireAuth.tsx';
 import Loading from '@/components/common/Loading.tsx';
 import NotFound from '@/components/layout/NotFoundLayout.tsx';
 import plannerRouter from '@/routes/plannerRouter.tsx';
@@ -43,8 +44,11 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      ...plannerRouter,
-      ...collectionRouter,
+      {
+        // 로그인 필수 영역. pathless 라우트로 Layout 안에서 가드만 추가한다.
+        element: <RequireAuth />,
+        children: [...plannerRouter, ...collectionRouter],
+      },
     ],
   },
 ]);
