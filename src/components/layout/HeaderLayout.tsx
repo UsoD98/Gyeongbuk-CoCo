@@ -1,10 +1,17 @@
 import { cn } from '@/utils/cn.ts';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import ThemeController from '@/components/common/ThemeController.tsx';
 import { Bell, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
+import { logout as logoutApi } from '@/api/auth.ts';
+import { useAuthStore } from '@/stores/authStore.ts';
+import { toast } from '@/stores/toastStore.ts';
 
 export const Header = () => {
+  const navigate = useNavigate();
+  // 부팅 복원(idle/loading) 중에는 로그인/로그아웃 메뉴를 둘 다 숨겨 깜빡임을 막는다.
+  const status = useAuthStore((state) => state.status);
+  const clearAuth = useAuthStore((state) => state.clear);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const toggleDrawer = () => {
@@ -13,6 +20,21 @@ export const Header = () => {
 
   const closeDrawer = () => {
     setIsDrawerOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // 서버 로그아웃이 실패해도 클라이언트 인증 상태는 비운다.
+    } finally {
+      clearAuth();
+      closeDrawer();
+      // 드롭다운을 닫기 위해 포커스 해제.
+      (document.activeElement as HTMLElement | null)?.blur();
+      toast.success('로그아웃되었습니다.');
+      navigate('/');
+    }
   };
 
   return (
@@ -99,16 +121,26 @@ export const Header = () => {
             tabIndex={-1}
             className="dropdown-content menu z-1 mt-4 w-28 rounded-box bg-base-100 p-2 shadow-lg"
           >
-            <li>
-              <NavLink to="/auth/login" onClick={closeDrawer}>
-                로그인
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/auth/register" onClick={closeDrawer}>
-                회원가입
-              </NavLink>
-            </li>
+            {status === 'authenticated' ? (
+              <li>
+                <button type="button" onClick={handleLogout}>
+                  로그아웃
+                </button>
+              </li>
+            ) : status === 'guest' ? (
+              <>
+                <li>
+                  <NavLink to="/auth/login" onClick={closeDrawer}>
+                    로그인
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/auth/register" onClick={closeDrawer}>
+                    회원가입
+                  </NavLink>
+                </li>
+              </>
+            ) : null}
           </ul>
         </div>
       </div>
