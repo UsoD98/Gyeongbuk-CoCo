@@ -18,7 +18,8 @@ export type Transport = 'CAR' | 'PUBLIC_TRANSPORT' | 'WALK';
 export interface CoursePlace {
   seq: number;
   time: string; // 'HH:mm:ss'
-  type: string; // 'ATTRACTION' | 'RESTAURANT' | ... (백엔드 enum 미확정)
+  // 백엔드 PlaceType 이름(실측): ATTRACTION|CULTURE|EVENT|LEPORTS|ACCOMMODATION|SHOPPING|FOOD
+  type: string;
   contentId: number;
   /** 상세(GBC012)·공개뷰(GBC014) 응답에만 포함. 목록·생성 응답엔 없음. */
   placeName?: string;

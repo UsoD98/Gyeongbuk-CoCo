@@ -7,7 +7,11 @@
  *   백엔드 확정 시 P2/P3(섬 P)에서 교정한다. docs/FE_계약_추적표.md 참조.
  */
 
-/** 콘텐츠 유형 (12:관광지 / 14:문화시설 / 32:숙박 / 39:음식점) */
+/**
+ * 콘텐츠 유형 (12:관광지 / 14:문화시설 / 32:숙박 / 39:음식점).
+ * FE `PoiCat`(4종) 대응값만 정의. 백엔드 `PlaceType`엔 15(축제)/28(레포츠)/38(쇼핑)도 있어
+ * POI 목록/상세(P2/P3) 확장 시 넓힌다.
+ */
 export type ContentTypeId = 12 | 14 | 32 | 39;
 
 /**
@@ -56,7 +60,12 @@ export interface PoiDetail extends PoiSummary {
   homepage?: string;
 }
 
-/** POI 좋아요 토글 응답 (GBC019 POST /poi/{contentId}/like) — ⚠️ 잠정. */
+/**
+ * POI 좋아요 토글 응답 (GBC019 POST /poi/{contentId}/like).
+ * 백엔드 `PoiLikeResponseDto`와 일치(실측). GBC019는 스펙 `완료`라 잠정 아님.
+ */
 export interface TogglePoiLikeResponse {
   liked: boolean;
+  /** 해당 POI의 총 좋아요 수 */
+  likes: number;
 }

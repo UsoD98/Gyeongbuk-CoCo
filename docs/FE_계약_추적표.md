@@ -1,53 +1,62 @@
 # FE ↔ BE 계약 추적표 (S0-A)
 
 > 짝 문서: [`FE_개발순서.md`](./FE_개발순서.md) §Step0 0-A · [`FE_API_연동가이드.md`](./FE_API_연동가이드.md) §1-A
-> 목적: 연동 착수 전 확정되지 않은 계약 4건을 **비블로킹**으로 추적한다.
-> 원칙: 답이 오면 반영, **안 오면 아래 "스펙 가정"으로 진행**하고 표를 유지한다.
-> **연동 중 400/422가 나면 이 표부터 확인한다.**
-> 최종 업데이트: 2026-07-17 (S0-A 등록, 4건 모두 스펙 가정으로 진행 중)
+> 목적: 연동 착수 전 확정되지 않았던 계약을 추적한다.
+> **연동 중 400/422/빈결과가 나면 이 표부터 확인한다.**
+> 최종 업데이트: 2026-07-17 (**백엔드 소스 실측 검증 완료** — `../back` 대조)
 
 ---
 
-## 계약 4건
+## 검증 방법
+FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobackend/{controller,dto,domain/enums,service}`)와 1:1 대조했다. 근거는 파일:라인으로 남긴다. (설정·비밀정보 파일은 제외)
 
-| # | 항목 | 스펙 가정(현재 코드가 따르는 값) | 백엔드에 확인 필요 | 코드 위치 | 상태 |
-|---|------|----------------------------------|--------------------|-----------|:---:|
-| 1 | `transport` | 대문자 enum `CAR` / `PUBLIC_TRANSPORT` / `WALK` | enum 값 확정 (대소문자·표현) | `api/tourCourse.ts` `Transport` | ☐ 미확정 |
-| 2 | `sigunguCode` | 단일 `string`, `35130`(TourAPI `35` 접두) 체계 | 단일값 여부 + 코드체계(`35`냐 `47`이냐) | `api/tourCourse.ts` `CreateCourseRequest.sigunguCode`, `api/poi.ts` `PoiListParams.sigunguCode` | ☐ 미확정 |
-| 3 | `theme` | 문자열 배열, 라벨 표기(예 `자연`,`맛집`) | 코드(`001`) vs 라벨(`자연`) | `api/tourCourse.ts` `CreateCourseRequest.theme: string[]` | ☐ 미확정 |
-| 4 | `userId` | 로그인/카카오/재발급 응답 `data.userId` 포함(정수) | 포함 여부, 아니면 `/user/me` 제공 여부 | `api/auth.ts` `LoginResponse.userId?`, `api/client.ts` reissue, `stores/authStore.ts` `userId` | ☐ 미확정 |
+## 계약 4건 (실측 결과)
 
-> 상태 배지: `☐` 미확정(스펙 가정으로 진행) · `☑` 확정(백엔드 합의 완료)
+| # | 항목 | 확정값 (백엔드 실측) | 근거 | 상태 |
+|---|------|----------------------|------|:---:|
+| 1 | `transport` | 대문자 enum `CAR`/`PUBLIC_TRANSPORT`/`WALK`. 요청 DTO가 `TransportType` enum이라 **정확 일치 필수** | `TransportType.java`, `TourCourseGenerateRequestDto.java:33` | ☑ 확정 |
+| 2 | `sigunguCode` | 단일 `string`, 선택. **법정동 시군구 코드(경북 접두 `47`)** — 서비스가 `findByLDongSignguCd`로 조회. openapi 예시 `35130`은 오해 소지 | `TourCourseGenerateRequestDto.java:38`, `TourCourseServiceImpl.java:232~237` | ◐ 타입확정/값주의 |
+| 3 | `theme` | `string[]`(≥1). **한국어 라벨 필수** — 값이 LLM 프롬프트에 그대로 삽입됨(코드/목id 금지) | `TourCourseGenerateRequestDto.java:35`, `TourCourseServiceImpl.java:371~379` | ◐ 타입확정/값주의 |
+| 4 | `userId` | **백엔드 미제공** — 로그인/재발급/카카오 응답은 `{accessToken}`뿐. JWT subject=email, `/user/me` 없음 | `LoginResponseDto.java`, `AuthController.java:43,72,84`, `JwtProvider.java:59~65` | ⛔ 블로커 |
 
----
-
-## 항목별 상세 & 방어 로직
-
-### 1. `transport`
-- 스펙 예시가 대문자(`CAR`)이므로 `Transport` 타입을 대문자 3종으로 고정.
-- FE 기존 코드의 `'walk'`(소문자, 하드코딩)는 **Step 1(GBC010)에서 선택 UI + 대문자 값으로 교체** 예정.
-- 확정되면 `Transport` union만 수정하면 전 파일에 전파된다.
-
-### 2. `sigunguCode`
-- 스펙은 **단일 string**이나 FE 검색폼은 다중선택(배열) 상태 → Step 1에서 `selectedDestinations[0]`처럼 단일값 전송으로 맞춘다.
-- 코드체계 불일치 주의: `sigunguStore`는 `47` 접두(법정동), 스펙 예시는 `35130`(TourAPI). 다중선택 정책과 함께 확정 필요.
-
-### 3. `theme`
-- 스펙 예시가 라벨 문자열(`자연`,`맛집`)이므로 `string[]`로 둠.
-- 단, FE `travelThemeStore`는 코드(`001~004`), `mocks`는 별도 id(history/food/…)라 **3중 불일치**. Step 1에서 백엔드 기대 표현으로 매핑 필요.
-
-### 4. `userId` (가장 중요 — 섬 M 선결)
-- **스펙 가정**: 로그인/카카오/재발급 응답 `data`에 `userId: number` 포함.
-- **방어 로직(구현됨, S0-C)**:
-  - `LoginResponse.userId?`는 **선택 필드** — 없어도 컴파일·동작.
-  - `authStore.setAuth(token, userId?)`: `userId`가 `undefined`면 기존 값을 **유지**(reissue가 안 실어줘도 덮어쓰지 않음).
-  - `userId`는 민감정보가 아니므로 `localStorage`(`gb-coco.userId`)에도 보관 → **새로고침(reissue) 후에도 즉시 복원**. 로그아웃/`clear()` 시 함께 삭제.
-- **미확정 리스크**: 백엔드가 어느 응답에도 `userId`를 주지 않으면, 최초 로그인 시점에 값이 없어 마이페이지(GBC006~009) 진입 불가. → 이 경우 백엔드에 **`/user/me` 토큰 기반 조회** 제공을 요청하고 섬 M 착수 전 재확정.
+> 배지: `☑` 확정 · `◐` 타입은 확정·값 의미론 주의 · `⛔` 계약 불일치(블로킹)
 
 ---
 
-## 구현 메모 (계약 외 결정 사항)
+## 항목별 상세
 
-- **`CourseScheduleDay` 이름**: 가이드 §1-B는 `CourseDay`로 표기하나, 목업/UI용 `CourseDay`(`@/types/planner.ts`, `{label, items}`)와 이름이 충돌·혼동되어 서버 스키마용은 `CourseScheduleDay`(`{date, places}`)로 명명했다. (`api/tourCourse.ts`)
-- **POI 응답 타입 잠정**: GBC017/018은 스펙 `보류` + 200 스키마 미정의 → `api/poi.ts`의 `PoiSummary`/`PoiDetail`은 TourAPI 관례 기반 **잠정**. P2/P3에서 백엔드 확정 시 교정.
-- **`POI cat ↔ contentTypeId` 매핑**: `api/poi.ts` `CONTENT_TYPE_BY_CAT`에 sight=12/culture=14/stay=32/food=39로 선반영(P0 전환 대비).
+### 1. `transport` ☑ 확정
+백엔드 `TransportType` enum = `CAR`("자동차")/`PUBLIC_TRANSPORT`("대중교통")/`WALK`("도보"). 요청 DTO 필드가 enum 타입이라 Jackson이 **정확한 대문자 문자열만** 역직렬화한다. FE `Transport` union 그대로 사용.
+- **Step 1 유의**: Index의 `'walk'` 하드코딩 제거 → 대문자 선택값으로 교체.
+
+### 2. `sigunguCode` ◐ (값 체계 주의)
+- 타입: 단일 `String`, 선택(없으면 전체 조회). FE `sigunguCode?: string` 정확.
+- **값 체계**: `TourCourseServiceImpl.fetchPlacesData`가 `tourRepository.findByLDongSignguCd(sigunguCode)`로 조회 → **법정동 시군구 코드**(경북 접두 `47`, 예 경주 `47130`). openapi 예시 `35130`(TourAPI 35접두)과 다르다. 잘못된 값이면 `"해당 지역의 여행지 데이터가 없습니다"` 예외(`:237`).
+- **Step 1 할 일**: FE `sigunguStore`의 실제 코드 접두를 확인해 `47xxx` 형식 **단일** 전송(현재 배열 → 단일).
+
+### 3. `theme` ◐ (라벨 필수)
+- 타입: `@NotEmpty List<String>`. FE `theme: string[]` 정확.
+- **값**: `buildUserRequest`가 `String.join(", ", theme)`로 **LLM 프롬프트에 그대로 삽입**(`"테마: 자연, 맛집"`), DB엔 JSON 배열로 저장. 검증·코드 매핑 없음.
+- **Step 1 할 일**: FE `travelThemeStore` 코드(`001~004`)·목 id(`history` 등)를 **한국어 라벨**(자연/맛집/힐링/문화…)로 매핑해 전송. 코드 그대로 보내면 AI 품질 저하.
+
+### 4. `userId` ⛔ (섬 M 블로커)
+- **현실**: 로그인/재발급/카카오 응답 DTO는 `LoginResponseDto{accessToken}`뿐. JWT는 `subject=email`+`role`만. `/user/me` 없음. 인증 엔드포인트는 전부 email(`Authentication.getName()`)로 사용자를 식별한다.
+- **결과**: 회원 API `GET/PATCH/DELETE /user/{userId}`(Long userId 경로변수)를 부를 **자기 userId를 FE가 얻을 방법이 없음** → **섬 M(GBC006~009) 착수 불가**.
+- **영향 범위**: 코스 파이프라인(S1~S7)·POI 좋아요(P1)는 userId 불필요(백엔드가 email로 처리) → 정상 진행.
+- **필요 결정(백엔드 중 택1)**: ① `LoginResponseDto`+재발급에 `userId` 추가, ② `GET /user/me`(토큰 기반) 추가, ③ JWT에 userId 클레임 추가(FE 디코드).
+- **FE 준비 상태**: S0-C(`authStore.userId`+`setAuth`+localStorage, `LoginResponse.userId?`)는 ①이 되면 **코드 수정 없이 즉시 동작**. 현재는 항상 null(무해).
+
+---
+
+## 응답 타입/엔드포인트 실측 (S0-B 검증)
+- ✅ `CreateCourseResponse`=`TourCourseGenerateResponseDto`, `CourseSummary`=`TourCourseListItemDto`, `CourseDetail`=`TourCourseShareResponseDto` 필드 **1:1 일치**. 봉투 `{code,msg,data}` 일치(`ApiResponse.java`).
+- ✅ GBC012 상세·GBC014 공개뷰가 **둘 다 `TourCourseShareResponseDto`** 반환 → FE 단일 `CourseDetail`로 `getCourse`/`getPublicCourse` 공용 가능(`TourCourseController.java:50,66`).
+- ✅ `place.type` 값 = `PlaceType` 이름: `ATTRACTION`/`CULTURE`/`EVENT`/`LEPORTS`/`ACCOMMODATION`/`SHOPPING`/`FOOD`(`PlaceType.java`).
+- ✅ 상세/뷰의 `placeName`은 항상 문자열(빈값 `""` 가능), 목록/생성 응답엔 없음(`TourCourseServiceImpl.buildCourseResponse:167`).
+- ✅ 게스트 생성(email null→userId null) → `assign`은 소유자 없을 때만 1회 허용(`TourCourseServiceImpl.assignCourse:203`). Step 1→2 흐름 그대로 작동.
+- ✅ POI 좋아요 응답 `{liked, likes}` → FE `TogglePoiLikeResponse`에 `likes` 반영(`PoiLikeResponseDto.java`).
+- ⏸ `GBC020`(PATCH `/tour-course/{courseId}`) 컨트롤러 미구현 → **S8 대기**. `GET /poi`·`/poi/{contentId}` 미구현 → **P2/P3 대기**.
+
+## 구현 메모
+- `CourseScheduleDay` 명명: 목업 `CourseDay`(`@/types/planner.ts`)와 충돌 회피(변경 없음).
+- `ContentTypeId`: FE는 `PoiCat`(4종) 대응값 12/14/32/39만 정의. 백엔드 `PlaceType`엔 15(축제)/28(레포츠)/38(쇼핑)도 있음 — POI 목록/상세(P2/P3) 확장 시 반영.
