@@ -45,6 +45,7 @@ export default function BudgetDashboard({
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
   const overrides = usePlannerStore((s) => s.overrides);
+  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
 
   const nights = nightsFromRange(search.start, search.end);
   const { byCat, total, perPerson, n } = computeBudget(
@@ -52,6 +53,7 @@ export default function BudgetDashboard({
     search.pax,
     overrides,
     nights + 1,
+    resolvePoi,
   );
   const cats = BCATS.map((c) => ({ ...c, value: byCat[c.key] }));
   const max = Math.max(total, 1);

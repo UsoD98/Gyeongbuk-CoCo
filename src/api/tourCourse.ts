@@ -8,6 +8,9 @@
  *    상세는 docs/FE_계약_추적표.md 참조. 400 발생 시 그 표부터 확인한다.
  */
 
+import { apiClient } from '@/api/client.ts';
+import type { ApiResponse } from '@/api/types.ts';
+
 /**
  * 이동수단 enum.
  * 스펙 가정: 대문자 3종(0-A 계약 미확정). docs/FE_계약_추적표.md #transport
@@ -76,4 +79,21 @@ export interface CreateCourseResponse {
 /** 코스 제목 수정 요청 (GBC015 PATCH /tour-course/{courseId}/title) */
 export interface UpdateCourseTitleRequest {
   title: string;
+}
+
+// ── API 함수 ───────────────────────────────────────────────
+
+/**
+ * POST /tour-course — AI 코스 생성 (비로그인 허용).
+ * 응답엔 courseId + schedule(장소는 seq/time/type/contentId)만 담긴다.
+ * 장소명/가격/좌표는 없으므로 UI는 POI 상세(GBC018) 연동 전까지 placeholder로 표시한다.
+ */
+export async function createCourse(
+  req: CreateCourseRequest,
+): Promise<CreateCourseResponse> {
+  const { data } = await apiClient.post<ApiResponse<CreateCourseResponse>>(
+    '/tour-course',
+    req,
+  );
+  return data.data;
 }

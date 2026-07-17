@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Bookmark, Calendar, MapPin, Share2, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bookmark, Calendar, Compass, MapPin, Share2, Users } from 'lucide-react';
 
 import BudgetDashboard from '@/components/planner/BudgetDashboard.tsx';
 import CoursePanel from '@/components/planner/CoursePanel.tsx';
@@ -7,9 +8,10 @@ import LoginGateModal from '@/components/planner/LoginGateModal.tsx';
 import PlannerDndProvider from '@/components/planner/PlannerDndProvider.tsx';
 import PoiDrawer from '@/components/planner/PoiDrawer.tsx';
 import ResultsPanel from '@/components/planner/ResultsPanel.tsx';
-import { REGIONS, nightsFromRange } from '@/mocks/planner.ts';
+import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
+import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { cn } from '@/utils/cn.ts';
 
@@ -21,6 +23,7 @@ export default function Planner() {
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
 
   const [tab, setTab] = useState<MobileTab>('results');
   const [gate, setGate] = useState<{ open: boolean; label: string | null }>({
@@ -30,8 +33,29 @@ export default function Planner() {
 
   const courseCount = course.days.reduce((a, d) => a + d.items.length, 0);
   const nights = nightsFromRange(search.start, search.end);
-  const regionName =
-    REGIONS.find((r) => r.code === search.dests[0])?.name ?? '경상북도';
+  // search.dests 는 시군구 코드(예 '130'). 목 REGIONS 슬러그와 코드 체계가 다르므로
+  // sigunguStore 라벨로 해석한다(미선택/미해석 시 '경상북도').
+  const regionName = search.dests.length
+    ? (getSigunguLabel(search.dests[0]) ?? '경상북도')
+    : '경상북도';
+
+  // 코스 미생성(직접 진입·새로고침으로 인메모리 상태 소실). 유령 요약/예산 대신 안내.
+  if (course.days.length === 0) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
+        <Compass size={40} className="text-base-content/30" />
+        <div className="flex flex-col gap-1">
+          <p className="text-lg font-bold">아직 만든 코스가 없어요</p>
+          <p className="text-sm text-base-content/60">
+            홈에서 여행 조건을 입력해 AI 코스를 만들어보세요.
+          </p>
+        </div>
+        <Link to="/" className="btn btn-primary btn-sm">
+          홈으로 가기
+        </Link>
+      </div>
+    );
+  }
 
   const requireAuth = (label: string, run: () => void) => {
     if (isAuthenticated) run();

@@ -14,7 +14,6 @@ import type { LucideIcon } from 'lucide-react';
 import CatBadge from '@/components/planner/parts/CatBadge.tsx';
 import ImgPlaceholder from '@/components/planner/parts/ImgPlaceholder.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
-import { poiById } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { won } from '@/utils/format.ts';
@@ -30,6 +29,7 @@ export default function PoiDrawer() {
   const activeDay = usePlannerStore((s) => s.activeDay);
   const closeDrawer = usePlannerStore((s) => s.closeDrawer);
   const addPoi = usePlannerStore((s) => s.addPoi);
+  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
 
   useEffect(() => {
     if (!drawer.open) return;
@@ -41,7 +41,7 @@ export default function PoiDrawer() {
   }, [drawer.open, closeDrawer]);
 
   if (!drawer.open || !drawer.poiId) return null;
-  const poi = poiById(drawer.poiId);
+  const poi = resolvePoi(drawer.poiId);
   if (!poi) return null;
 
   const day = course.days[activeDay];

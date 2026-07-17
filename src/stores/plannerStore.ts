@@ -1,13 +1,17 @@
 import { create } from 'zustand';
 
-import { DEFAULT_COURSE, poiById } from '@/mocks/planner.ts';
+import type { CoursePlace, CreateCourseResponse } from '@/api/tourCourse.ts';
+import { CATEGORIES, poiById } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
-import type { Course } from '@/types/planner.ts';
+import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
 
 /**
  * 플래너 단일 도메인 스토어.
  * 결과·코스·예산 패널이 모두 이 스토어를 구독한다 → 한 곳을 바꾸면 전 패널이 즉시 갱신.
  * 예산은 저장하지 않고 course+pax+overrides 에서 파생 계산한다(@/utils/budget).
+ *
+ * 코스 데이터 출처: 홈 검색 → createCourse(GBC010) → loadFromApi 주입.
+ * 부팅 시 목업 코스를 싣던 로직은 S1에서 제거했다(코스는 생성 흐름으로만 채워진다).
  *
  * 표시 전용 상태(리스트/지도 토글, 카테고리 필터, 모바일 탭, 인라인 편집 여부)는
  * 각 컴포넌트 로컬 state 로 두고 여기에는 두지 않는다.
@@ -26,13 +30,39 @@ interface Drawer {
   poiId: string | null;
 }
 
+/**
+ * loadFromApi 가 함께 받는 검색 컨텍스트.
+ * 생성 응답(courseId + schedule)엔 제목·지역·인원 같은 헤더가 없으므로,
+ * 검색 폼 입력값을 넘겨 요약/예산 표시에 사용한다.
+ */
+export interface LoadFromApiContext {
+  title: string;
+  dests: string[];
+  start: string;
+  end: string;
+  pax: number;
+  themes: string[];
+}
+
 interface PlannerState {
+  /** 서버 코스 id. 게스트 생성 후 저장(GBC016)·상세(GBC012)에서 사용. 미생성 시 null. */
+  courseId: number | null;
   search: Search;
   course: Course;
+  /**
+   * API 생성 코스의 장소를 UI Poi 로 임시 표현한 레지스트리(key = String(contentId)).
+   * 생성 응답엔 이름/가격/좌표가 없어 placeholder 로 채운다 — POI 상세(GBC018) 연동 시 실데이터로 대체.
+   */
+  apiPois: Record<string, Poi>;
   activeDay: number;
   /** poiId → 사용자가 수정한 금액 */
   overrides: Record<string, number>;
   drawer: Drawer;
+
+  /** poiId → Poi. API 레지스트리 우선, 없으면 목 데이터. 모든 소비처가 이걸로 해석한다. */
+  resolvePoi: (id: string) => Poi | undefined;
+  /** GBC010 생성 응답을 스토어에 주입(부팅 목업 대체). */
+  loadFromApi: (res: CreateCourseResponse, ctx: LoadFromApiContext) => void;
 
   setSearch: (patch: Partial<Search>) => void;
   setActiveDay: (i: number) => void;
@@ -47,30 +77,87 @@ interface PlannerState {
   closeDrawer: () => void;
 }
 
-/** 초기값이 참조로 변형되지 않도록 깊은 복사 */
-function cloneCourse(c: Course): Course {
+/** 백엔드 PlaceType(실측 7종) → UI PoiCat(4종) 매핑. */
+const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
+  ATTRACTION: 'sight',
+  LEPORTS: 'sight',
+  SHOPPING: 'sight',
+  CULTURE: 'culture',
+  EVENT: 'culture',
+  ACCOMMODATION: 'stay',
+  FOOD: 'food',
+};
+
+/**
+ * 생성 응답의 장소(seq/time/type/contentId)를 UI Poi placeholder 로 변환.
+ * 이름/가격/좌표/평점은 생성 응답에 없어 임시값 — POI 상세(GBC018) 연동 시 실데이터로 대체된다.
+ */
+function synthesizePoi(place: CoursePlace, region: string): Poi {
+  const cat = PLACE_TYPE_TO_CAT[place.type] ?? 'sight';
+  const time = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
   return {
-    title: c.title,
-    days: c.days.map((d) => ({ label: d.label, items: [...d.items] })),
+    id: String(place.contentId),
+    region,
+    name: `장소 #${place.contentId}`,
+    cat,
+    themes: [],
+    buckets: [1, 2, '3-4'],
+    price: 0,
+    priceNote: '정보 준비 중',
+    hours: time || '시간 미정',
+    rating: 0,
+    reviews: 0,
+    x: 50,
+    y: 50,
+    tags: [],
+    img: CATEGORIES[cat].label,
+    desc: '상세 정보는 준비 중이에요. (POI 연동 예정)',
   };
 }
 
 export const usePlannerStore = create<PlannerState>((set, get) => ({
-  // 프로토타입 기본값 부팅 (검색화면 부재 → 경주 2박3일·2인 + 채워진 코스)
-  search: {
-    dests: ['gyeongju'],
-    start: '2026-06-12',
-    end: '2026-06-14',
-    pax: 2,
-    themes: ['history', 'food'],
-  },
-  course: cloneCourse(DEFAULT_COURSE.gyeongju),
+  courseId: null,
+  search: { dests: [], start: '', end: '', pax: 1, themes: [] },
+  course: { title: '', days: [] },
+  apiPois: {},
   activeDay: 0,
   overrides: {},
   drawer: { open: false, poiId: null },
 
-  setSearch: (patch) =>
-    set((s) => ({ search: { ...s.search, ...patch } })),
+  resolvePoi: (id) => get().apiPois[id] ?? poiById(id),
+
+  loadFromApi: (res, ctx) => {
+    const apiPois: Record<string, Poi> = {};
+    const days: CourseDay[] = res.schedule.map((day, i) => {
+      const places = [...day.places].sort((a, b) => a.seq - b.seq);
+      const items: string[] = [];
+      places.forEach((place) => {
+        const key = String(place.contentId);
+        apiPois[key] = synthesizePoi(place, ctx.dests[0] ?? '');
+        // 하루 내 동일 contentId 중복 방지: items 는 React key·DnD sortable id 로 쓰여
+        // 중복되면 key 충돌·재정렬 오작동이 난다(addPoi 의 includes 가드와 동일한 불변식).
+        if (!items.includes(key)) items.push(key);
+      });
+      return { label: `Day ${i + 1}`, items };
+    });
+    set({
+      courseId: res.courseId,
+      apiPois,
+      course: { title: ctx.title, days },
+      search: {
+        dests: ctx.dests,
+        start: ctx.start,
+        end: ctx.end,
+        pax: ctx.pax,
+        themes: ctx.themes,
+      },
+      activeDay: 0,
+      overrides: {},
+      drawer: { open: false, poiId: null },
+    });
+  },
+
+  setSearch: (patch) => set((s) => ({ search: { ...s.search, ...patch } })),
 
   setActiveDay: (i) => set({ activeDay: i }),
 
@@ -78,7 +165,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     const s = get();
     const day = s.course.days[s.activeDay];
     if (!day) return;
-    const poi = poiById(poiId);
+    const poi = s.resolvePoi(poiId);
     if (day.items.includes(poiId)) {
       if (poi) toast.info(`'${poi.name}'은(는) 이미 코스에 있어요`);
       return;
