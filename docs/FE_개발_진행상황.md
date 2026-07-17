@@ -2,7 +2,7 @@
 
 > **이 파일이 진행상황의 정본이다.** 새 세션을 시작해도 이 파일을 열면 어디까지 됐는지 알 수 있다.
 > 상세 사양: [`FE_개발순서.md`](./FE_개발순서.md) · 현재 상태: [`FE_API_현황.md`](./FE_API_현황.md) · 레시피: [`FE_API_연동가이드.md`](./FE_API_연동가이드.md)
-> 최종 업데이트: 2026-07-17 (Step 0 · 기반 완료 — S0-A~D · 백엔드 소스 실측 검증)
+> 최종 업데이트: 2026-07-17 (S1 · GBC010 AI 코스 생성 완료 — 생성 파이프라인 + placeholder 렌더)
 
 ## 업데이트 방법
 - 작업을 시작하면 `☐` → `◐`(진행중), 끝나면 `☑`(완료)로 바꾼다.
@@ -17,11 +17,11 @@
 | 그룹 | 완료 / 전체 | 비고 |
 |------|:---:|------|
 | Step 0 · 기반 | 4 / 4 | ☑ 완료 — 모든 작업의 선행 |
-| 메인 스파인 (코스) | 0 / 8 | S1 착수 가능(백엔드 실측 일치). S1 전 sigungu(법정동47)·theme(라벨) 맞출 것. Step 8은 ⏸ |
+| 메인 스파인 (코스) | 1 / 8 | S1 완료. 다음 S2(저장/귀속). Step 8은 ⏸ |
 | 🏝️ 섬 M · 마이페이지 | 0 / 4 | ⏸ userId 계약 대기(백엔드 미제공) — FE 준비는 완료 |
 | 🏝️ 섬 P · POI | 0 / 4 | S0 완료 → P0·P1 착수 가능. P2·P3은 ⏸ |
 | 부록 A · 정리(선택) | 0 / 4 | API와 독립 |
-| **합계** | **4 / 24** | |
+| **합계** | **5 / 24** | |
 
 ---
 
@@ -34,7 +34,7 @@
 
 ## 메인 스파인 · 코스 (순차)
 
-- [ ] `☐` **S1 · GBC010 AI 코스 생성** ▶ — 의존: S0-A, S0-B. `Index.handleSearch`→`createCourse`→`plannerStore.loadFromApi`→`/planner`. DoD: 검색→실제 코스 표시. → 순서 §Step1
+- [x] `☑` **S1 · GBC010 AI 코스 생성** — `Index.handleSearch`→`createCourse`→`plannerStore.loadFromApi`(placeholder POI 합성)→`/planner`. transport 선택 UI·단일 sigunguCode(`47`+값)·한국어 theme 라벨·게스트 courseId 보관·부팅 목업 제거. DoD 코드 충족(장소명은 POI 상세=P3 후). ⚠️ 실백엔드 E2E는 dev 서버 기동 시 확인, ResultsPanel 목 브라우즈는 P2 경계. → 순서 §Step1
 - [ ] `☐` **S2 · GBC016 저장(소유권 이전)** ▶ — 의존: S1. 게스트 courseId 보관→로그인→`assign`. DoD: 저장 후 내 계정 귀속. → 순서 §Step2
 - [ ] `☐` **S3 · GBC011 내 코스 목록** ▶ — 의존: S2, S0-D. `Collection.tsx` 구현+`getMyCourses`. DoD: 저장 코스 카드 렌더+빈/로딩/에러. → 순서 §Step3
 - [ ] `☐` **S4 · GBC012 코스 상세** ▶ — 의존: S3. `plannerRouter :courseId`+`getCourse`. DoD: 카드→상세 일정 렌더, URL 재진입. → 순서 §Step4
@@ -78,3 +78,4 @@
 - 2026-07-17 · S0-D 완료 · 공용 `EmptyState`/`ErrorState`/`Skeleton` + `hooks/useAsync` 패턴 확립.
 - 2026-07-17 · S0 검증 · 4렌즈 적대적 검증 워크플로 → 확정 2건 반영(useAsync 실패 시 data 보존, ErrorState `aria-hidden`). lint·build 재통과.
 - 2026-07-17 · 백엔드 소스(`../back`) 실측 검증 · 계약 4건 대조 → transport/sigunguCode/theme 타입 일치 확정, **userId 백엔드 미제공 확인(섬 M 보류)**, sigungu(법정동47)·theme(라벨) 값주의. 타입 보정 2건(`CoursePlace.type` 주석, `TogglePoiLikeResponse.likes`) + 추적표 실측 갱신.
+- 2026-07-17 · S1 완료 · GBC010 생성 파이프라인(홈 검색→`createCourse`→`loadFromApi`→`/planner`) + 이동수단 선택 UI + placeholder POI 렌더(Option A: 생성 응답에 장소명 없어 `장소 #contentId`로 표시, 실데이터는 P3 후). 계약값 적용: transport 대문자 enum·sigunguCode `47`+값 단일·theme 한국어 라벨·게스트 courseId 스토어 보관·부팅 목업/`console.log` 제거. 4렌즈 적대적 검증(15에이전트) → 확정 3종 반영: ①`search.dests`(시군구 코드)를 sigunguStore 라벨로 해석(Planner/ResultsPanel 지역명), ②빈 코스 유령 요약/예산 가드, ③하루 내 `contentId` dedup. lint·build 통과. ⚠️ 실백엔드 E2E는 dev 서버 기동 시 확인 필요, ResultsPanel 목 브라우즈는 P2에서 실 POI로 대체.
