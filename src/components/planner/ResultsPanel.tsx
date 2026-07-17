@@ -8,6 +8,7 @@ import { resultDragId } from '@/components/planner/dnd.ts';
 import EmptyState from '@/components/planner/parts/EmptyState.tsx';
 import { POIS, REGIONS, paxBucket } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
+import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { cn } from '@/utils/cn.ts';
 import type { Poi } from '@/types/planner.ts';
 
@@ -71,12 +72,17 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const openDrawer = usePlannerStore((s) => s.openDrawer);
   const addPoi = usePlannerStore((s) => s.addPoi);
   const setSearch = usePlannerStore((s) => s.setSearch);
+  const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
 
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [cat, setCat] = useState<string>('all');
 
   const pois = filterPois(search.dests, search.pax, search.themes);
-  const region = REGIONS.find((r) => r.code === search.dests[0]);
+  // search.dests 는 시군구 코드. 지역명은 sigunguStore 로 해석한다.
+  // (mock POI 필터·ready 게이트는 슬러그 기반이라 실 POI 목록(P2)에서 대체 예정)
+  const regionName = search.dests.length
+    ? getSigunguLabel(search.dests[0])
+    : undefined;
   const ready = search.dests.some(
     (d) => REGIONS.find((r) => r.code === d)?.ready,
   );
@@ -90,7 +96,7 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="flex items-center gap-1.5 font-bold">
             <Compass size={18} className="text-primary" />
-            {region?.name ?? '결과'}
+            {regionName ?? '결과'}
           </span>
           <span className="badge badge-sm badge-ghost">{pois.length}곳</span>
         </div>

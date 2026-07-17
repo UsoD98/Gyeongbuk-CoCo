@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   MapPin,
@@ -8,9 +9,16 @@ import {
   Minus,
   Plus,
   TableProperties,
+  Car,
+  Check,
 } from 'lucide-react';
 import DatePicker from 'react-datepicker';
-import { useSigunguStore } from '@/stores/sigunguStore.ts';
+import { createCourse } from '@/api/tourCourse.ts';
+import type { Transport } from '@/api/tourCourse.ts';
+import { getApiErrorMessage } from '@/api/types.ts';
+import { usePlannerStore } from '@/stores/plannerStore.ts';
+import { GYEONGBUK_AREA_CODE, useSigunguStore } from '@/stores/sigunguStore.ts';
+import { toast } from '@/stores/toastStore.ts';
 import { useTravelThemeStore } from '@/stores/travelThemeStore.ts';
 import { cn } from '@/utils/cn.ts';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -26,6 +34,13 @@ const formatDate = (date: Date | null): string | null => {
   return `${year}-${month}-${day}`;
 };
 
+/** 이동수단 선택지 (백엔드 TransportType enum과 1:1). 라벨은 표시용. */
+const TRANSPORT_OPTIONS: { value: Transport; label: string }[] = [
+  { value: 'CAR', label: '자동차' },
+  { value: 'PUBLIC_TRANSPORT', label: '대중교통' },
+  { value: 'WALK', label: '도보' },
+];
+
 export default function Index() {
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>(
     [],
@@ -39,8 +54,13 @@ export default function Index() {
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const [isDestinationDropdownOpen, setIsDestinationDropdownOpen] =
     useState(false);
+  const [transport, setTransport] = useState<Transport>('CAR');
+  const [isTransportDropdownOpen, setIsTransportDropdownOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const destinationDropdownRef = useRef<HTMLDivElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
+  const transportDropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const [startDate, endDate] = dateRange;
   const sigunguList = useSigunguStore((state) => state.sigunguList);
   const getSigunguLabel = useSigunguStore((state) => state.getSigunguLabel);
@@ -64,12 +84,20 @@ export default function Index() {
       ) {
         setIsDestinationDropdownOpen(false);
       }
+
+      if (
+        transportDropdownRef.current &&
+        !transportDropdownRef.current.contains(target)
+      ) {
+        setIsTransportDropdownOpen(false);
+      }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsThemeDropdownOpen(false);
         setIsDestinationDropdownOpen(false);
+        setIsTransportDropdownOpen(false);
       }
     };
 
@@ -128,18 +156,59 @@ export default function Index() {
 
   const hasSelectedDestinations = selectedDestinationLabels.length > 0;
 
-  const handleSearch = () => {
-    const searchParams = {
-      peopleCount: number,
-      startDate: formatDate(startDate),
-      endDate: formatDate(endDate),
-      transport: 'walk', // TODO: 이동수단 선택 UI 추가 시 상태값으로 교체
-      theme: selectedThemes,
-      sigunguCode: selectedDestinations,
-    };
+  const transportLabel =
+    TRANSPORT_OPTIONS.find((option) => option.value === transport)?.label ??
+    '이동수단';
 
-    // TODO: 검색 API 연동 시 교체 (임시 확인용)
-    console.log('search', searchParams);
+  const handleSearch = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    const start = formatDate(startDate);
+    const end = formatDate(endDate);
+    if (!start || !end) {
+      toast.error('여행 일정을 선택해주세요');
+      return;
+    }
+    if (selectedThemeLabels.length === 0) {
+      toast.error('테마를 최소 1개 선택해주세요');
+      return;
+    }
+
+    // 계약(docs/FE_계약_추적표.md #2): sigunguCode 는 법정동 시군구 코드 단일값(경북 접두 47).
+    // 목적지 UI는 복수 선택이나 스펙은 단일 → 첫 선택만 전송(미선택 시 백엔드 전체 조회).
+    const sigunguCode = selectedDestinations.length
+      ? `${GYEONGBUK_AREA_CODE}${selectedDestinations[0]}`
+      : undefined;
+
+    setIsSubmitting(true);
+    try {
+      const res = await createCourse({
+        peopleCount: number,
+        startDate: start,
+        endDate: end,
+        transport,
+        theme: selectedThemeLabels, // 계약(#3): 한국어 라벨 전송(코드/목id 금지)
+        sigunguCode,
+      });
+      const destLabel = selectedDestinations.length
+        ? getSigunguLabel(selectedDestinations[0])
+        : undefined;
+      usePlannerStore.getState().loadFromApi(res, {
+        title: destLabel ? `${destLabel} 여행 코스` : 'AI 추천 코스',
+        dests: selectedDestinations,
+        start,
+        end,
+        pax: number,
+        themes: selectedThemes,
+      });
+      navigate('/planner/');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, '코스 생성에 실패했어요'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -171,6 +240,7 @@ export default function Index() {
                   type="button"
                   onClick={() => {
                     setIsThemeDropdownOpen(false);
+                    setIsTransportDropdownOpen(false);
                     setIsDestinationDropdownOpen((current) => !current);
                   }}
                   className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
@@ -299,6 +369,70 @@ export default function Index() {
 
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
+          {/* 이동수단 */}
+          <div className="relative flex flex-1 items-center gap-2 px-3 lg:px-4">
+            <Car size={20} className="shrink-0 text-base-content/40" />
+            <div ref={transportDropdownRef} className="w-full min-w-0">
+              <div className="text-xs font-semibold text-base-content/60">
+                이동수단
+              </div>
+              <div className="relative flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDestinationDropdownOpen(false);
+                    setIsThemeDropdownOpen(false);
+                    setIsTransportDropdownOpen((current) => !current);
+                  }}
+                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
+                >
+                  <span className="block min-w-0 flex-1 truncate text-base-content">
+                    {transportLabel}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    className={cn(
+                      'shrink-0 text-base-content/40 transition-transform',
+                      isTransportDropdownOpen && 'rotate-180',
+                    )}
+                  />
+                </button>
+
+                {isTransportDropdownOpen ? (
+                  <div className="absolute top-full left-0 z-10 mt-2 w-full rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg">
+                    <div className="space-y-1">
+                      {TRANSPORT_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            setTransport(option.value);
+                            setIsTransportDropdownOpen(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition hover:bg-base-200 sm:text-sm',
+                            transport === option.value
+                              ? 'font-semibold text-primary'
+                              : 'text-base-content/70',
+                          )}
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {option.label}
+                          </span>
+                          {transport === option.value ? (
+                            <Check size={16} className="shrink-0 text-primary" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
+
           {/* 테마 선택 */}
           <div className="relative flex flex-1 items-center gap-2 px-3 lg:px-4">
             <TableProperties size={20} className="shrink-0 text-base-content/40" />
@@ -309,7 +443,11 @@ export default function Index() {
               <div className="relative flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setIsThemeDropdownOpen((current) => !current)}
+                  onClick={() => {
+                    setIsDestinationDropdownOpen(false);
+                    setIsTransportDropdownOpen(false);
+                    setIsThemeDropdownOpen((current) => !current);
+                  }}
                   className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
                 >
                   <span
@@ -365,9 +503,17 @@ export default function Index() {
             type="button"
             aria-label="검색"
             onClick={handleSearch}
-            className="btn h-12 w-full flex-none items-center justify-center rounded-full border-none bg-primary p-0 text-white shadow-md transition hover:bg-primary-600 lg:h-12 lg:w-12"
+            disabled={isSubmitting}
+            className={cn(
+              'btn h-12 w-full flex-none items-center justify-center rounded-full border-none bg-primary p-0 text-white shadow-md transition hover:bg-primary-600 lg:h-12 lg:w-12',
+              isSubmitting && 'pointer-events-none opacity-70',
+            )}
           >
-            <Search size={20} />
+            {isSubmitting ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              <Search size={20} />
+            )}
           </button>
         </div>
       </div>

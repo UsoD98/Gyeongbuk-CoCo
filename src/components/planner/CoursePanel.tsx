@@ -12,7 +12,6 @@ import {
   useActiveDrag,
 } from '@/components/planner/dnd.ts';
 import EmptyState from '@/components/planner/parts/EmptyState.tsx';
-import { poiById } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { cn } from '@/utils/cn.ts';
@@ -74,6 +73,7 @@ export default function CoursePanel({ mobile = false }: { mobile?: boolean }) {
   const course = usePlannerStore((s) => s.course);
   const activeDay = usePlannerStore((s) => s.activeDay);
   const setActiveDay = usePlannerStore((s) => s.setActiveDay);
+  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
 
   const day = course.days[activeDay];
   const active = useActiveDrag();
@@ -125,7 +125,7 @@ export default function CoursePanel({ mobile = false }: { mobile?: boolean }) {
           >
             <div className="flex flex-col gap-2.5">
               {day.items.map((id, idx) => {
-                const poi = poiById(id);
+                const poi = resolvePoi(id);
                 if (!poi) return null;
                 return (
                   <CourseItem key={id} poi={poi} n={idx + 1} dayIdx={activeDay} />

@@ -39,12 +39,16 @@ export function defaultCost(poi: Poi, n: number): number {
 /**
  * course(days[].items[poiId]) + pax + overrides + days → 예산.
  * 교통비는 좌표 기반 추정 자리(프로토타입과 동일): 8500 × max(1,days) × ceil(n/4).
+ *
+ * `resolve`: poiId → Poi 해석기. 기본은 목 데이터(poiById)지만, API 생성 코스의
+ * 합성 POI까지 포함하려면 호출부가 plannerStore.resolvePoi 를 넘긴다.
  */
 export function computeBudget(
   course: Course | undefined,
   n: number,
   overrides: Record<string, number> = {},
   days = 3,
+  resolve: (id: string) => Poi | undefined = poiById,
 ): Budget {
   const items: BudgetItem[] = [];
   const byCat: Record<BudgetCatKey, number> = {
@@ -56,7 +60,7 @@ export function computeBudget(
 
   (course?.days ?? []).forEach((day) => {
     (day.items ?? []).forEach((id) => {
-      const poi = poiById(id);
+      const poi = resolve(id);
       if (!poi) return;
       const bcat = catOf(poi.cat);
       const edited = overrides[id] != null;
