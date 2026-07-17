@@ -42,13 +42,12 @@ let refreshPromise: Promise<string> | null = null;
 // 인터셉터 루프를 피하려고 재발급은 별도의 axios로 호출한다.
 // 앱 부팅 시 세션 복원에도 재사용한다(App.tsx).
 export async function reissueAccessToken(): Promise<string> {
-  const { data } = await axios.post<ApiResponse<{ accessToken: string }>>(
-    `${baseURL}/auth/reissue`,
-    null,
-    { withCredentials: true },
-  );
-  const accessToken = data.data.accessToken;
-  useAuthStore.getState().setAccessToken(accessToken);
+  const { data } = await axios.post<
+    ApiResponse<{ accessToken: string; userId?: number }>
+  >(`${baseURL}/auth/reissue`, null, { withCredentials: true });
+  const { accessToken, userId } = data.data;
+  // reissue 응답에 userId가 없으면(undefined) authStore가 기존/저장된 값을 유지한다.
+  useAuthStore.getState().setAuth(accessToken, userId);
   return accessToken;
 }
 
