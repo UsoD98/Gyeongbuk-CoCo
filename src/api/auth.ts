@@ -9,6 +9,12 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
+  /**
+   * 로그인 사용자 id. 스펙 가정: 로그인/카카오 응답 `data`에 포함(0-A 계약 미확정).
+   * 없으면 undefined → authStore.userId 미확정(마이페이지 진입 시 재확인 필요).
+   * docs/FE_계약_추적표.md #userId
+   */
+  userId?: number;
 }
 
 export interface KakaoCallbackRequest {

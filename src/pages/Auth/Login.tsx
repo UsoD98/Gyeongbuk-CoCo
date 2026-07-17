@@ -46,7 +46,7 @@ export default function Login() {
   // RequireAuth가 가드로 막을 때 state.from에 원래 가려던 위치를 담아 보낸다.
   // 로그인 성공 후 그 위치로 복귀하고, 없으면(직접 로그인 진입) 홈으로 간다.
   const from = (location.state as { from?: Location } | null)?.from;
-  const setAccessToken = useAuthStore((state) => state.setAccessToken);
+  const setAuth = useAuthStore((state) => state.setAuth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Errors>({});
@@ -74,8 +74,11 @@ export default function Login() {
 
     setSubmitting(true);
     try {
-      const { accessToken } = await login({ email: email.trim(), password });
-      setAccessToken(accessToken);
+      const { accessToken, userId } = await login({
+        email: email.trim(),
+        password,
+      });
+      setAuth(accessToken, userId);
       toast.success('로그인되었습니다.');
       navigate(redirectTo, { replace: true });
     } catch (error) {

@@ -16,7 +16,7 @@ interface KakaoLoginComponentProps {
 
 const KakaoLoginComponent = ({ redirectTo = '/' }: KakaoLoginComponentProps) => {
   const navigate = useNavigate();
-  const setAccessToken = useAuthStore((state) => state.setAccessToken);
+  const setAuth = useAuthStore((state) => state.setAuth);
   // 콜백이 진행 중일 때 버튼 더블클릭으로 교환 요청이 중복 발사되는 것을 막는다.
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,10 +39,10 @@ const KakaoLoginComponent = ({ redirectTo = '/' }: KakaoLoginComponentProps) => 
           setSubmitting(true);
           try {
             // FE가 받은 카카오 AccessToken을 백엔드에 넘겨 자체 JWT로 교환한다.
-            const { accessToken } = await kakaoCallback({
+            const { accessToken, userId } = await kakaoCallback({
               kakaoAccessToken: response.response.access_token,
             });
-            setAccessToken(accessToken);
+            setAuth(accessToken, userId);
             toast.success('로그인되었습니다.');
             navigate(redirectTo, { replace: true });
           } catch (err) {
