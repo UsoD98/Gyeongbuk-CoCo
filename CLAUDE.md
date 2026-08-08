@@ -26,9 +26,9 @@ npm run preview      # 빌드 결과 미리보기
 src/
 ├── main.tsx · App.tsx          # 진입점
 ├── index.css                   # Tailwind v4 + daisyUI + @theme 변수 (전역 CSS는 여기만)
-├── api/                        # axios 모듈 (현재 비어 있음)
-├── components/{auth,common,layout}/
-├── hooks/                      # 커스텀 훅 (현재 비어 있음)
+├── api/                        # axios 모듈 (client·auth·user·tourCourse·poi·types)
+├── components/{auth,common,layout,planner}/
+├── hooks/                      # 커스텀 훅 (useAsync + useCourse* 계열)
 ├── pages/<Domain>/<Page>.tsx
 ├── routes/router.tsx           # createBrowserRouter
 │         <domain>Router.tsx    # 도메인별 RouteObject[] (default export)
@@ -40,6 +40,8 @@ src/
 - `src/routes/router.tsx` — 루트 라우터. 도메인 라우터를 `...spread`로 합성.
 - `src/components/layout/Layout.tsx` — 전역 셸 (Header + main + Footer, 반응형 폭).
 - `src/stores/themeStore.ts` — Zustand + localStorage + `data-theme` 동기화 모범 사례.
+- `src/api/client.ts` — axios 인스턴스(baseURL·토큰 주입·401 재발급 인터셉터). API 함수 표준: `src/api/auth.ts`(`ApiResponse` 봉투 벗기기).
+- `src/hooks/useAsync.ts` — 로딩/에러/데이터 캡슐화 훅. 데이터 화면은 이 훅 + 공용 `EmptyState`/`ErrorState`/`Skeleton` 재사용.
 - `src/utils/cn.ts` — 모든 클래스 합성에 사용.
 - `src/index.css` — `@theme` 색상 토큰, daisyUI 테마 활성화, 폰트.
 - `.env.development` — `VITE_KAKAO_JAVASCRIPT_KEY`, `VITE_REDIRECT_URI`. 커밋·로그 노출 금지.

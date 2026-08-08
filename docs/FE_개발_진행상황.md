@@ -2,7 +2,8 @@
 
 > **이 파일이 진행상황의 정본이다.** 새 세션을 시작해도 이 파일을 열면 어디까지 됐는지 알 수 있다.
 > 상세 사양: [`FE_개발순서.md`](./FE_개발순서.md) · 현재 상태: [`FE_API_현황.md`](./FE_API_현황.md) · 레시피: [`FE_API_연동가이드.md`](./FE_API_연동가이드.md)
-> 최종 업데이트: 2026-08-08 (A1 · `/home` 더미 라우트 제거 완료 — `router.tsx`에서 `Home` lazy import·`home` 라우트 블록 삭제 + `src/pages/Home.tsx`(반응형 레이아웃 테스트용 더미) 삭제. `/home`로의 링크·네비게이션 없음 확인(다른 `Home` 참조는 lucide 아이콘으로 무관). lint·build 통과)
+> 최종 업데이트: 2026-08-08 (A3 · 문서 드리프트 최신화 완료 — `CLAUDE.md`(디렉터리 트리 `api/`·`hooks/` "비어 있음" 정정 + 핵심 파일에 `api/client.ts`·`hooks/useAsync.ts` 추가), `PRD_FRONT.md`(§5 구현 매핑 표를 S1~S7 완료·실제 파일/스토어/훅 목록으로 갱신 + 상단·§5에 보드가 구현 현황 정본이라는 포인터), `FEATURES_FRONT.md`(상단에 인라인 구현 표기가 기준일 스냅샷임을 경고 + 보드 포인터). 소스 무변경(문서만) → lint·build 영향 없음)
+> 이전 업데이트: 2026-08-08 (A1 · `/home` 더미 라우트 제거 완료 — `router.tsx`에서 `Home` lazy import·`home` 라우트 블록 삭제 + `src/pages/Home.tsx`(반응형 레이아웃 테스트용 더미) 삭제. `/home`로의 링크·네비게이션 없음 확인(다른 `Home` 참조는 lucide 아이콘으로 무관). lint·build 통과)
 > 이전 업데이트: 2026-08-08 (S7 · GBC014 공유+공개뷰 완료 — `getPublicCourse`(순수 axios, 인터셉터 우회)+`shareRouter`(가드 밖 `/share/:id`)+`Share` 읽기전용 공개뷰+`useCourseShare`(카카오 공유 SDK 시도→실패 시 클립보드 폴백)+`kakaoShare`/`courseFormat` 유틸. lint·build 통과. 5173 라이브: 가드 밖·비로그인 401 미발생·에러 UI 검증. 해피패스 데이터 렌더는 백엔드 AI 생성 500 아웃티지로 보류(복구 시 재확인))
 
 ## 업데이트 방법
@@ -21,8 +22,8 @@
 | 메인 스파인 (코스) | 7 / 8 | S1~S7 완료. 남은 건 S8(⏸ 백엔드 대기) |
 | 🏝️ 섬 M · 마이페이지 | 0 / 4 | ⏸ userId 계약 대기(백엔드 미제공) — FE 준비는 완료 |
 | 🏝️ 섬 P · POI | 0 / 4 | S0 완료 → P0·P1 착수 가능. P2·P3은 ⏸ |
-| 부록 A · 정리(선택) | 1 / 4 | A1 완료. A2~A4 대기 |
-| **합계** | **12 / 24** | |
+| 부록 A · 정리(선택) | 2 / 4 | A1·A3 완료. A2·A4 대기 |
+| **합계** | **13 / 24** | |
 
 ---
 
@@ -64,7 +65,7 @@
 
 - [x] `☑` **A1 · `/home` 더미 라우트 제거** — `router.tsx`에서 `Home` lazy import·`home` 라우트 블록 삭제 + `src/pages/Home.tsx` 삭제. 링크·네비게이션 없음 확인, lint·build 통과.
 - [ ] `☐` **A2 · About 콘텐츠 작성** — `pages/About.tsx`(현재 스텁)
-- [ ] `☐` **A3 · 문서 드리프트 최신화** — `FEATURES_FRONT.md`·`PRD_FRONT.md`·`CLAUDE.md`
+- [x] `☑` **A3 · 문서 드리프트 최신화** — `CLAUDE.md`(디렉터리 트리 정정+핵심 파일 보강)·`PRD_FRONT.md`(§5 구현 매핑 갱신+보드 포인터)·`FEATURES_FRONT.md`(구현 표기 스냅샷 경고+보드 포인터). 보드를 구현 현황 정본으로 명시.
 - [ ] `☐` **A4 · RootLayout 정리 판단** — `RootLayout.tsx`(라우터 미연결)
 
 ---
@@ -90,5 +91,6 @@
 - 2026-08-08 · S6 완료 · GBC015 코스 제목 수정. `api/tourCourse.ts` `updateCourseTitle(courseId, title)`(`PATCH /tour-course/{id}/title`, body `{title}`(255자 이하), 봉투 벗김 void) + `plannerStore.setTitle`(낙관적 업데이트·롤백용 동기 세터) + `hooks/useCourseTitle`(요청 직전 `getState().course.title`로 이전값 캡처→낙관적 `setTitle`→실패 시 롤백+toast, 공백·미변경은 no-op) + `components/planner/EditableCourseTitle`(요약 헤더 제목: `editable=false`면 읽기전용 `<h1>`, `true`면 클릭→autofocus+전체선택 input→**Enter/blur 단일 커밋**·Escape는 `cancelRef`로 blur 커밋 차단해 취소, 저장 중 스피너). `Planner.tsx` 요약 헤더의 읽기전용 `<h1>{course.title}` → `EditableCourseTitle`로 교체, 편집 노출 조건 `isAuthenticated && storeCourseId!=null`(게스트·미저장 코스는 편집 UI 미노출). CoursePanel의 제목 표시(:98)는 스토어 title 반영이라 무변경(낙관적 편집 시 자동 갱신). ⚠️ 비소유 코스 편집 시 백엔드 401→인터셉터 로그아웃(S4 기록 기존 동작, 정상 흐름=컬렉션 경유 소유 코스에선 미발생). lint·build 통과. 실백엔드 E2E(제목 영속·새로고침 유지)는 dev+백엔드+로그인 시 확인.
 - 2026-08-08 · S7 완료 · GBC014 공유 + 공개뷰. `api/tourCourse.ts` `getPublicCourse(courseId)`(`GET /tour-course/{id}/view`, **`apiClient` 대신 순수 axios**로 호출 — 공개뷰는 토큰 없이 200이어야 하는데 인터셉터를 타면 비로그인 수신자에게 재발급 실패→강제 로그인 리다이렉트가 걸려 공유 UX가 깨지므로 원천 차단). `routes/shareRouter.tsx`(가드 밖 `/share/:courseId`, `router.tsx`에서 Layout 하위·RequireAuth 형제로 spread) + `pages/Share/Share.tsx`(읽기전용: "공유받은 코스" 배너+요약 헤더(제목·경상북도·기간·인원·이동수단·테마)+Day별 일정 카드(시간·장소명·타입 라벨)+"코스 만들기" CTA, `useAsync`로 로딩/에러) + `hooks/useCourseShare.ts`(공유 흐름 캡슐화: `shareViaKakao`→false면 `copyToClipboard` 폴백, courseId 없으면 no-op, 로그인 불필요) + `utils/kakaoShare.ts`(Kakao JS SDK 온디맨드 `<script>` 주입+`init`, `Share.sendDefault` 피드 템플릿; 키없음·도메인미등록·로드실패 등 모든 실패를 삼켜 false 반환 → 클립보드 폴백이 DoD "링크 생성"을 항상 보장) + `utils/courseFormat.ts`(`TRANSPORT_LABEL`·`PLACE_TYPE_LABEL`·`formatDate`·`formatTime`·`tripDuration` 추출, Collection이 로컬 정의 대신 재사용). `Planner.tsx` `onShare` toast 목업 제거→`share()`, 공유 게이트(requireAuth) 제거(수신자만 비로그인). `client.ts`는 `API_BASE_URL` export(공개 요청 재사용). lint·build 통과.
 - 2026-08-08 · S7 브라우저 E2E 검증(5173, 실백엔드) · ✓`/share/999` 진입 시 URL 유지(=**가드 밖**, `/auth/login` 리다이렉트 없음), ✓`GET /tour-course/999/view` **순수 axios 직행→404**(reissue 인터셉터·강제 로그아웃 루프 안 탐; 보인 `auth/reissue` 200 2건은 App 부팅 세션복원으로 `/view`와 무관), ✓부재 코스→`ErrorState`("코스를 찾을 수 없어요"+백엔드 msg "존재하지 않는 코스입니다"(`getApiErrorMessage`)+다시 시도), ✓StrictMode 이중 호출 멱등(2×404 동일), ✓콘솔 에러 없음. App.tsx 부팅 로직 대조: 세션복원 실패 시 `clear()`(게스트)만·리다이렉트 없음 → 로그아웃 수신자도 리다이렉트 없이 공개뷰 열람(DoD 메커니즘 충족). ⚠️ **백엔드 아웃티지**: `POST /tour-course`(AI 생성)가 모든 파라미터 조합에서 즉시 **500**(지역 지정/미지정·테마 무관), 기존 코스 0개(id 1~40 `/view` 스캔 전부 부재) → 실데이터 해피패스 렌더·공유 버튼(카카오/클립보드)은 라이브 미검증(코드·build·lint로 커버, 백엔드 AI 복구 시 재확인). 이 500은 S1 로그의 AI 간헐 오류와 동일 계열의 백엔드 이슈.
+- 2026-08-08 · A3 완료 · 문서 드리프트 최신화. **드리프트 원인**: `PRD_FRONT.md`·`FEATURES_FRONT.md`는 기준일 2026-06-06 상위 기획 문서로 "셸 수준·대부분 미구현" 상태를 서술 → 실제 코드는 S1~S7(코스 도메인 API 연동)까지 진척. **정정**: ①`CLAUDE.md` 디렉터리 트리의 `api/`·`hooks/` "(현재 비어 있음)" → 실제 모듈 목록으로 교체 + 핵심 파일에 `api/client.ts`(인터셉터)·`hooks/useAsync.ts` 추가(표준 패턴 노출). ②`PRD_FRONT.md` §5 구현 매핑 표를 실제 파일/라우트/스토어/훅·완료(GBC010~016)·백엔드 대기(섬 P/M) 반영으로 재작성, 상단·§5에 "구현 현황 정본=보드" 포인터 추가, `/home` 제거 완료 반영. ③`FEATURES_FRONT.md` 상단에 인라인 구현 표기가 기준일 스냅샷임을 경고하고 보드로 위임(40여 블록 개별 정정 대신 정본 위임 — 저효율 회피). **소스 무변경(문서만)** → lint·build 영향 없음(A1 통과 상태 유효). 계약 추적표 무관.
 - 2026-08-08 · A1 완료 · `/home` 더미 라우트 제거. `router.tsx`에서 `Home` lazy import(구 :14)와 `home` 라우트 블록(구 :32~39) 삭제 + `src/pages/Home.tsx`(반응형 Layout 테스트용 더미 페이지) 삭제. `/home`로의 `Link`/`navigate` 없음 확인(코드베이스 grep — 다른 `Home` 참조는 `NotFoundLayout`/`BudgetDashboard`의 lucide 아이콘으로 무관). lint·build 통과(빌드 산출물에서 Home 청크 사라짐). 파괴적 영향 없음(더미 페이지, 외부 진입점 아님).
 - 2026-08-08 · S2 완료 · GBC016 코스 소유권 이전(="저장"). `api/tourCourse.ts` `assignCourse(courseId)`(`PATCH /tour-course/{id}/assign`) + `hooks/useCourseSave.ts`(저장 흐름 캡슐화) 신설. 흐름: 게스트 저장 클릭→`courseId`를 `sessionStorage`에 stash + 로그인 게이트→로그인 성공(클라 내비게이션, zustand 싱글턴이라 스토어 유지)→복귀 시 effect가 대기 저장 감지→`assignCourse` 자동 실행. `Planner.onSave` toast-only 목업 제거, 저장 버튼 진행(spinner)/완료("저장됨") 반영(요약+`BudgetDashboard`). 중복 저장 가드: 백엔드가 이미 소유자 있는 코스에 403 반환→`saved`/`saving` 가드 + `runAssign` 시작 시 `clearPending()`(StrictMode 이중발사 차단). 대기값이 현재 `courseId`와 다르면 폐기(오래된 값). 백엔드 실측 대조(`TourCourseController`·`TourCourseServiceImpl`) 완료. lint·build 통과. ⚠️ 실백엔드 E2E는 dev+백엔드 기동 시 확인.
