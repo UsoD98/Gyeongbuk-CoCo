@@ -1,7 +1,7 @@
 import { cn } from '@/utils/cn.ts';
 import { NavLink, useNavigate } from 'react-router-dom';
 import ThemeController from '@/components/common/ThemeController.tsx';
-import { Bell, User, Menu, X } from 'lucide-react';
+import { User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { logout as logoutApi } from '@/api/auth.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
@@ -99,20 +99,18 @@ export const Header = () => {
       </div>
 
       {/* 우측 액션 버튼 */}
-      <div className={cn('navbar-end', 'gap-1 md:gap-2', 'ml-auto')}>
-        <div role="button" className="text-primary-50 btn-ghost btn-sm">
+      <div className={cn('navbar-end', 'gap-0.5 md:gap-1', 'ml-auto')}>
+        {/* 테마 토글: 내부 label+checkbox 가 상호작용/포커스를 담당하므로
+            래퍼에 role="button" 을 두지 않는다(중첩 인터랙티브 회피). */}
+        <div className="text-primary-50 btn-ghost btn-sm">
           <ThemeController />
-        </div>
-        <div
-          role="button"
-          className="cursor-pointer text-primary-50 btn-ghost btn-sm"
-        >
-          <Bell size={20} />
         </div>
         <div className="dropdown dropdown-end dropdown-bottom">
           <div
             tabIndex={0}
             role="button"
+            aria-label="계정 메뉴"
+            aria-haspopup="menu"
             className="cursor-pointer text-primary-50 btn-ghost btn-sm"
           >
             <User size={20} />

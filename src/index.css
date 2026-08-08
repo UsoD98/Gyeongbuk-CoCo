@@ -75,6 +75,12 @@
     }
 }
 
+/* 커스텀 입력(DateTrigger) 버튼이 검색바 칸 전체 너비를 차지하도록 wrapper 를 블록 100%로. */
+.react-datepicker-wrapper {
+    display: block;
+    width: 100%;
+}
+
 .react-datepicker__header {
     background-color: var(--color-primary-500) !important;
 
