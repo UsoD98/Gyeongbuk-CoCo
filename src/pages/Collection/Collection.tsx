@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bookmark, Calendar, Trash2, Users } from 'lucide-react';
 
-import type { CourseSummary, Transport } from '@/api/tourCourse.ts';
+import type { CourseSummary } from '@/api/tourCourse.ts';
 import { getApiErrorMessage } from '@/api/types.ts';
 import ConfirmDialog from '@/components/common/ConfirmDialog.tsx';
 import EmptyState from '@/components/common/EmptyState.tsx';
@@ -11,31 +11,15 @@ import Skeleton from '@/components/common/Skeleton.tsx';
 import { useCourseDelete } from '@/hooks/useCourseDelete.ts';
 import { useCourseList } from '@/hooks/useCourseList.ts';
 import { cn } from '@/utils/cn.ts';
-
-/** 이동수단 표시 라벨(백엔드 enum → 한국어). Index.tsx TRANSPORT_OPTIONS와 동일. */
-const TRANSPORT_LABEL: Record<Transport, string> = {
-  CAR: '자동차',
-  PUBLIC_TRANSPORT: '대중교통',
-  WALK: '도보',
-};
-
-/** 'yyyy-MM-dd' → 'yyyy.MM.dd'. 파싱 없이 구분자만 치환(타임존 영향 없음). */
-function formatDate(ymd: string): string {
-  return ymd.replaceAll('-', '.');
-}
+import {
+  formatDate,
+  TRANSPORT_LABEL,
+  tripDuration,
+} from '@/utils/courseFormat.ts';
 
 /** ISO datetime('2026-06-27T10:00:00') → 'yyyy.MM.dd'. 날짜 파트만 사용. */
 function formatCreatedAt(iso: string): string {
   return formatDate(iso.slice(0, 10));
-}
-
-/** 'yyyy-MM-dd' 두 날짜의 숙박 일수 → 'N박 M일'(당일이면 '당일'). */
-function tripDuration(startYmd: string, endYmd: string): string {
-  const start = new Date(`${startYmd}T00:00:00`);
-  const end = new Date(`${endYmd}T00:00:00`);
-  const nights = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-  if (!Number.isFinite(nights) || nights <= 0) return '당일';
-  return `${nights}박 ${nights + 1}일`;
 }
 
 /**
