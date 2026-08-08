@@ -9,7 +9,9 @@
  *    상세는 docs/FE_계약_추적표.md 참조. 400 발생 시 그 표부터 확인한다.
  */
 
-import { apiClient } from '@/api/client.ts';
+import axios from 'axios';
+
+import { apiClient, API_BASE_URL } from '@/api/client.ts';
 import type { ApiResponse } from '@/api/types.ts';
 
 /**
@@ -123,6 +125,23 @@ export async function getMyCourses(): Promise<CourseSummary[]> {
 export async function getCourse(courseId: number): Promise<CourseDetail> {
   const { data } = await apiClient.get<ApiResponse<CourseDetail>>(
     `/tour-course/${courseId}`,
+  );
+  return data.data;
+}
+
+/**
+ * GET /tour-course/{courseId}/view — 공개 코스 뷰 (GBC014). **인증 불필요**.
+ * 카카오 공유 링크 수신자(비로그인)가 코스를 조회하는 유일한 경로다. 응답은 상세와 동일한
+ * `CourseDetail` 형태(헤더 + `schedule[].places[]`, `placeName` 포함).
+ *
+ * ⚠️ `apiClient`(Bearer 첨부·401 재발급 인터셉터)를 쓰지 않고 **순수 axios**로 호출한다.
+ *    공개뷰는 토큰이 없어도 200 이어야 하는데, 만약 인터셉터를 타면 비로그인 수신자에게
+ *    재발급 실패 → 강제 로그인 리다이렉트가 걸릴 수 있어(공유 UX 파괴) 이를 원천 차단한다.
+ *    (쿠키 불필요 → withCredentials 생략.)
+ */
+export async function getPublicCourse(courseId: number): Promise<CourseDetail> {
+  const { data } = await axios.get<ApiResponse<CourseDetail>>(
+    `${API_BASE_URL}/tour-course/${courseId}/view`,
   );
   return data.data;
 }

@@ -7,6 +7,7 @@ import NotFound from '@/components/layout/NotFoundLayout.tsx';
 import plannerRouter from '@/routes/plannerRouter.tsx';
 import collectionRouter from '@/routes/collectionRouter.tsx';
 import authRouter from '@/routes/authRouter.tsx';
+import shareRouter from '@/routes/shareRouter.tsx';
 
 const LoadingComponent = <Loading />;
 const Index = lazy(() => import('@/pages/Index'));
@@ -46,6 +47,8 @@ const router = createBrowserRouter([
       },
       // 플래너는 게스트 허용(탐색·코스 작성은 비로그인 가능). 저장/공유만 액션 시점 게이트.
       ...plannerRouter,
+      // 공개 코스 뷰(GBC014). 비로그인 수신자용 → 반드시 가드(RequireAuth) 밖.
+      ...shareRouter,
       {
         // 로그인 필수 영역. pathless 라우트로 Layout 안에서 가드만 추가한다.
         element: <RequireAuth />,

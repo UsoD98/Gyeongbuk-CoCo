@@ -14,11 +14,11 @@ import PoiDrawer from '@/components/planner/PoiDrawer.tsx';
 import ResultsPanel from '@/components/planner/ResultsPanel.tsx';
 import { useCourseDetail } from '@/hooks/useCourseDetail.ts';
 import { useCourseSave } from '@/hooks/useCourseSave.ts';
+import { useCourseShare } from '@/hooks/useCourseShare.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
-import { toast } from '@/stores/toastStore.ts';
 import { cn } from '@/utils/cn.ts';
 
 type MobileTab = 'results' | 'course' | 'budget';
@@ -39,6 +39,7 @@ export default function Planner() {
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
 
   const { saving, saved, save } = useCourseSave();
+  const { sharing, share } = useCourseShare();
 
   const [tab, setTab] = useState<MobileTab>('results');
   const [gate, setGate] = useState<{ open: boolean; label: string | null }>({
@@ -90,14 +91,10 @@ export default function Planner() {
     );
   }
 
-  const requireAuth = (label: string, run: () => void) => {
-    if (isAuthenticated) run();
-    else setGate({ open: true, label });
-  };
   // 저장 = 코스 소유권 이전(GBC016). 비로그인이면 로그인 게이트를 열고, 복귀 후 자동 저장된다.
   const onSave = () => save(() => setGate({ open: true, label: '저장' }));
-  const onShare = () =>
-    requireAuth('공유', () => toast.success('공유 링크가 생성됐어요'));
+  // 공유(GBC014) = 공개뷰 링크 생성. 로그인 불필요(수신자만 비로그인 열람) → 게이트 없이 즉시.
+  const onShare = () => void share();
 
   const summary = (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-base-100 p-4 shadow-lg sm:p-5">
@@ -141,8 +138,14 @@ export default function Planner() {
           type="button"
           className="btn btn-sm btn-primary gap-1"
           onClick={onShare}
+          disabled={sharing}
         >
-          <Share2 size={16} />공유
+          {sharing ? (
+            <span className="loading loading-spinner loading-xs" />
+          ) : (
+            <Share2 size={16} />
+          )}
+          공유
         </button>
       </div>
     </div>

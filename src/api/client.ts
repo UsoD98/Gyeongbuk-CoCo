@@ -6,7 +6,9 @@ import axios, {
 import type { ApiResponse } from '@/api/types.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 
-const baseURL = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1`;
+/** 백엔드 API 기본 경로. 인터셉터 없는 공개 요청(공개뷰 GBC014 등)에서도 재사용한다. */
+export const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1`;
+const baseURL = API_BASE_URL;
 
 /**
  * 세션 만료로 하드 리다이렉트할 때 넘기는 1회용 메시지.
