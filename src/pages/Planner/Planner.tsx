@@ -8,6 +8,7 @@ import LoginGateModal from '@/components/planner/LoginGateModal.tsx';
 import PlannerDndProvider from '@/components/planner/PlannerDndProvider.tsx';
 import PoiDrawer from '@/components/planner/PoiDrawer.tsx';
 import ResultsPanel from '@/components/planner/ResultsPanel.tsx';
+import { useCourseSave } from '@/hooks/useCourseSave.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
@@ -24,6 +25,8 @@ export default function Planner() {
   const search = usePlannerStore((s) => s.search);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
+
+  const { saving, saved, save } = useCourseSave();
 
   const [tab, setTab] = useState<MobileTab>('results');
   const [gate, setGate] = useState<{ open: boolean; label: string | null }>({
@@ -61,8 +64,8 @@ export default function Planner() {
     if (isAuthenticated) run();
     else setGate({ open: true, label });
   };
-  const onSave = () =>
-    requireAuth('저장', () => toast.success('컬렉션에 저장했어요'));
+  // 저장 = 코스 소유권 이전(GBC016). 비로그인이면 로그인 게이트를 열고, 복귀 후 자동 저장된다.
+  const onSave = () => save(() => setGate({ open: true, label: '저장' }));
   const onShare = () =>
     requireAuth('공유', () => toast.success('공유 링크가 생성됐어요'));
 
@@ -92,8 +95,14 @@ export default function Planner() {
           type="button"
           className="btn btn-sm btn-outline gap-1"
           onClick={onSave}
+          disabled={saving || saved}
         >
-          <Bookmark size={16} />저장
+          {saving ? (
+            <span className="loading loading-spinner loading-xs" />
+          ) : (
+            <Bookmark size={16} />
+          )}
+          {saved ? '저장됨' : '저장'}
         </button>
         <button
           type="button"
@@ -122,7 +131,12 @@ export default function Planner() {
           </div>
         </PlannerDndProvider>
         <div className={cn(PANEL_CARD, 'p-5')}>
-          <BudgetDashboard onSave={onSave} onShare={onShare} />
+          <BudgetDashboard
+            onSave={onSave}
+            onShare={onShare}
+            saving={saving}
+            saved={saved}
+          />
         </div>
       </div>
 

@@ -3,7 +3,7 @@
 > 짝 문서: [`FE_개발순서.md`](./FE_개발순서.md) §Step0 0-A · [`FE_API_연동가이드.md`](./FE_API_연동가이드.md) §1-A
 > 목적: 연동 착수 전 확정되지 않았던 계약을 추적한다.
 > **연동 중 400/422/빈결과가 나면 이 표부터 확인한다.**
-> 최종 업데이트: 2026-07-17 (**백엔드 소스 실측 검증 완료** — `../back` 대조)
+> 최종 업데이트: 2026-08-08 (#2 `sigunguCodes` 라이브 실측으로 정정 — 복수 필드·3자리 bare 코드 확정)
 
 ---
 
@@ -15,7 +15,7 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 | # | 항목 | 확정값 (백엔드 실측) | 근거 | 상태 |
 |---|------|----------------------|------|:---:|
 | 1 | `transport` | 대문자 enum `CAR`/`PUBLIC_TRANSPORT`/`WALK`. 요청 DTO가 `TransportType` enum이라 **정확 일치 필수** | `TransportType.java`, `TourCourseGenerateRequestDto.java:33` | ☑ 확정 |
-| 2 | `sigunguCode` | 단일 `string`, 선택. **법정동 시군구 코드(경북 접두 `47`)** — 서비스가 `findByLDongSignguCd`로 조회. openapi 예시 `35130`은 오해 소지 | `TourCourseGenerateRequestDto.java:38`, `TourCourseServiceImpl.java:232~237` | ◐ 타입확정/값주의 |
+| 2 | `sigunguCodes` | **복수** `string[]`, 선택. **법정동 시군구 코드 3자리 bare**(예 경주 `130`, 접두 `47` 없음) — 서비스가 `findByLDongSignguCdIn`으로 조회. FE `sigunguStore.value`·`mst_sigungu`와 동일 | `TourCourseGenerateRequestDto.java:38`, `TourCourseServiceImpl.java:412~417`, 라이브 실측(200/400) | ☑ 확정 |
 | 3 | `theme` | `string[]`(≥1). **한국어 라벨 필수** — 값이 LLM 프롬프트에 그대로 삽입됨(코드/목id 금지) | `TourCourseGenerateRequestDto.java:35`, `TourCourseServiceImpl.java:371~379` | ◐ 타입확정/값주의 |
 | 4 | `userId` | **백엔드 미제공** — 로그인/재발급/카카오 응답은 `{accessToken}`뿐. JWT subject=email, `/user/me` 없음 | `LoginResponseDto.java`, `AuthController.java:43,72,84`, `JwtProvider.java:59~65` | ⛔ 블로커 |
 
@@ -30,11 +30,12 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - **Step 1 유의**: Index의 `'walk'` 하드코딩 제거 → 대문자 선택값으로 교체.
 - **S1 반영(2026-07-17)**: `Index`에 이동수단 드롭다운(`CAR`/`PUBLIC_TRANSPORT`/`WALK`) 추가, `'walk'` 하드코딩 제거. 기본값 `CAR`.
 
-### 2. `sigunguCode` ◐ (값 체계 주의)
-- 타입: 단일 `String`, 선택(없으면 전체 조회). FE `sigunguCode?: string` 정확.
-- **값 체계**: `TourCourseServiceImpl.fetchPlacesData`가 `tourRepository.findByLDongSignguCd(sigunguCode)`로 조회 → **법정동 시군구 코드**(경북 접두 `47`, 예 경주 `47130`). openapi 예시 `35130`(TourAPI 35접두)과 다르다. 잘못된 값이면 `"해당 지역의 여행지 데이터가 없습니다"` 예외(`:237`).
-- **Step 1 할 일**: FE `sigunguStore`의 실제 코드 접두를 확인해 `47xxx` 형식 **단일** 전송(현재 배열 → 단일).
-- **S1 반영(2026-07-17)**: `sigunguCode = GYEONGBUK_AREA_CODE('47') + sigunguStore.value(뒤 3자리)` 단일 전송(예 경주 `47130`). 목적지 UI는 복수 선택 유지하되 첫 선택만 전송, 미선택 시 미전송(백엔드 전체 조회). ⚠️ 값 정확성(법정동 코드 일치)은 실백엔드 200/400 응답으로 최종 확인 필요.
+### 2. `sigunguCodes` ☑ 확정 (라이브 실측으로 정정)
+- 타입: **복수** `List<String>`(백엔드 DTO 필드명 `sigunguCodes`), 선택(없으면 경북 전역 선정). ⚠️ **S1의 단수 `sigunguCode?: string`은 필드명·값 형식 둘 다 오류였음** — 백엔드가 인식하지 못해 지역 필터가 조용히 무시됐다.
+- **값 체계(정정)**: `fetchPlacesData`가 `tourRepository.findByLDongSignguCdIn(codes)`로 조회. `Tour.lDongSignguCd`는 **3자리 bare 코드**(예 경주 `130`)이고, 시도코드 `47`은 별도 컬럼 `lDongRegnCd`라 필터에 쓰이지 않는다. 따라서 **접두 `47`을 붙이면(`47130`) 매칭 실패** → `"해당 지역의 여행지 데이터가 없습니다"`. FE `sigunguStore.value`(111/130/…)와 `mst_sigungu.sigunguCode`가 동일 3자리. openapi 예시 `35130`(TourAPI 35접두)은 이 엔드포인트와 무관.
+- **라이브 실측(2026-08-08, DB 기동 상태)**: `["47130"]` → 400 "해당 지역의 여행지 데이터가 없습니다"(fetchPlacesData 단계 즉시). `["130"]` → 지역 조회 통과(이후 AI 단계 진행). 미전송(전역) → 정상 생성(courseId 11/12).
+- **수정 반영(2026-08-08)**: `CreateCourseRequest.sigunguCodes?: string[]`로 변경. `Index`가 `selectedDestinations`(bare value 배열, 복수 선택 전부)를 그대로 전송(미선택 시 생략). `GYEONGBUK_AREA_CODE` 접두 로직 제거.
+- **잔여 주의(POI)**: `api/poi.ts`의 GBC017 `getPois` 파라미터는 아직 단수 `sigunguCode`(openapi 예 `35130`) 그대로 — POI 엔드포인트는 백엔드 `보류`라 미검증. P2 착수 시 이 create 실측처럼 필드/코드 체계 재확인 필요.
 
 ### 3. `theme` ◐ (라벨 필수)
 - 타입: `@NotEmpty List<String>`. FE `theme: string[]` 정확.

@@ -4,7 +4,8 @@
  * 백엔드 `ApiResponse<T>` 봉투의 `data` 부분(=봉투를 벗긴 형태)을 1:1로 정의한다.
  * 봉투 부착·해제는 각 API 함수(Step 1~7에서 추가)가 담당하므로 여기선 타입만 둔다.
  *
- * ⚠️ 계약 가정: `transport` enum / `sigunguCode` 단일 string 은 백엔드 확정 전 스펙 가정이다.
+ * ⚠️ 계약: `transport` enum 은 스펙 가정(미확정). `sigunguCodes` 는 실측 확정
+ *    (백엔드 `findByLDongSignguCdIn` — 법정동 시군구 3자리 bare, 접두 '47' 없음, 복수).
  *    상세는 docs/FE_계약_추적표.md 참조. 400 발생 시 그 표부터 확인한다.
  */
 
@@ -66,8 +67,12 @@ export interface CreateCourseRequest {
   endDate: string; // 'yyyy-MM-dd' (시작 이후)
   transport: Transport;
   theme: string[]; // 최소 1개 이상
-  /** 스펙 가정: 단일 string(예 '35130'). 0-A 계약 미확정. docs/FE_계약_추적표.md #sigunguCode */
-  sigunguCode?: string;
+  /**
+   * 법정동 시군구 코드 목록(백엔드 `lDongSignguCd`, 3자리 bare — 예 '130'=경주).
+   * 실측 확정: 접두 '47' 없이 sigunguStore value 그대로, 복수 허용.
+   * 생략/빈 배열이면 백엔드가 경북 전역에서 선정. docs/FE_계약_추적표.md #sigunguCode
+   */
+  sigunguCodes?: string[];
 }
 
 /** AI 코스 생성 응답 (GBC010) — 생성 직후엔 title/헤더 없이 courseId + 일정만 온다. */
@@ -96,4 +101,15 @@ export async function createCourse(
     req,
   );
   return data.data;
+}
+
+/**
+ * PATCH /tour-course/{courseId}/assign — 코스 소유권 이전(= "저장").
+ * 비로그인으로 생성된 코스(userId=null)를 현재 로그인 사용자에게 귀속시킨다. 인증 필수(Bearer).
+ * 응답 data 는 null.
+ * ⚠️ 이미 소유자가 있는 코스면 백엔드가 403("이미 소유자가 있는 코스입니다")을 반환한다 →
+ *    호출부에서 중복 저장을 막을 것(useCourseSave 의 saved 가드).
+ */
+export async function assignCourse(courseId: number): Promise<void> {
+  await apiClient.patch<ApiResponse<null>>(`/tour-course/${courseId}/assign`);
 }
