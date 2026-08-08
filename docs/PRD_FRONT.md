@@ -3,7 +3,8 @@
 > 이 문서는 **FE 고유의 화면 명세·구현 매핑**만 다룬다. 화면(스크린)을 1급 시민으로 보고, 각 화면이 백엔드에 요구하는 데이터/액션과 **레이아웃 변형(variant)** 을 명시한다.
 > 공유 비전·문제·핵심기능·차별성·데이터·지역 테마·발전방향·통합 미결(OQ)의 **단일 출처(SoT)는 [PRD.md](PRD.md)** 다. 본 문서에서는 재서술하지 않고 링크로 참조한다.
 > **시각 설계의 단일 출처는 인터랙티브 화면 설계 프로토타입**(`경북 CoCo 화면 설계 (standalone).html`)이며, 그 토대는 [DESIGN.md](../DESIGN.md) 디자인 토큰이다. 본 문서는 프로토타입에서 확정된 화면·라우트·변형을 텍스트로 옮긴 것이다.
-> 버전 0.3 · 기준일 2026-06-06.
+> 버전 0.3 · 기준일 2026-06-06 · 구현 매핑(§5) 갱신 2026-08-08.
+> **이 문서는 화면 요구사항·변형의 명세다. 구현 진행 현황의 정본은 [`FE_개발_진행상황.md`](FE_개발_진행상황.md) Task 보드**이며, 본 문서 §5가 현재 코드베이스 스냅샷을 요약한다.
 
 ## 공유 컨텍스트 (→ PRD.md 참조)
 
@@ -178,25 +179,25 @@
 
 ## 5. 구현 매핑 (코드베이스 ↔ 화면)
 
-현재 라우트/모듈은 셸 수준이며, 기능 로직은 대부분 미구현이다.
+> **구현 현황의 정본은 [`FE_개발_진행상황.md`](FE_개발_진행상황.md) Task 보드다.** 아래 표는 화면↔파일 매핑과 코스 도메인(S1~S7) 완료를 반영한 스냅샷이다. 세부 진행률은 보드를 본다.
+> 코스 도메인(GBC010~016)은 API 연동까지 구현 완료. POI 실데이터·지도 실연동(섬 P)과 마이페이지(섬 M) 일부는 백엔드 대기 중이며, 그 지점은 현재 목/플레이스홀더로 동작한다.
 
 | 화면 | 라우트 | 파일 | 현재 상태 |
 | --- | --- | --- | --- |
-| S1 메인/검색 | `/` | `src/pages/Index.tsx` | 검색 UI 구현됨. 목적지·테마 옵션은 더미(시군구·실제 테마로 교체 필요). 히어로 변형 미적용. |
-| S2 플래너 | `/planner` | `src/pages/Planner/Planner.tsx` | 플레이스홀더. 워크스페이스 레이아웃·지도·코스·예산 미구현. |
-| S2a POI 상세 드로어 | (S2 내부) | (신규) `src/components/planner/PoiDrawer.tsx`·`PoiCard.tsx` 등 | 미작성. POI 카드 3변형 고려. |
-| S2b 로그인 모달 | (전역) | (신규) `src/components/auth/LoginModal.tsx` | 미작성. `KakoLoginComponent` 재사용. |
-| S3 공유 뷰어 | `/share/:id` | (신규) `src/pages/Share/Share.tsx` + `shareRouter.tsx` | 미작성. **추가 필요**. |
-| S4 컬렉션/마이 | `/collection` | `src/pages/Collection/Collection.tsx` | 플레이스홀더. |
-| S5/S6 인증 | `/auth/*` | `src/pages/Auth/*`, `src/components/auth/KakoLoginComponent.tsx` | 카카오 OAuth 위젯 존재. |
-| S7 소개 | `/about` | `src/pages/About.tsx` | 존재(콘텐츠 정비 필요). |
-| S8 404 | `*` | `src/components/layout/NotFoundLayout.tsx` | 존재. |
-| (제거) home | `/home` | `src/pages/Home.tsx` | **제거 대상** — 메인과 중복. |
-| API 계층 | — | `src/api/` | **비어 있음.** 자체 백엔드 API 클라이언트(+ 카카오 SDK) 미작성. 관광공사 OpenAPI는 백엔드 담당. |
-| 상태 관리 | — | `src/stores/` | `themeStore`만 존재. `searchStore`·`courseStore`·`budgetStore`·`authStore` 미작성. |
-| 커스텀 훅 | — | `src/hooks/` | 비어 있음. |
+| S1 메인/검색 | `/` | `src/pages/Index.tsx` | 구현됨. 목적지=시군구 멀티셀렉트(`sigunguStore`), 테마=`travelThemeStore`. 검색→`createCourse`(GBC010)→`plannerStore`→`/planner`. 히어로 변형은 검색 중심안 채택. |
+| S2 플래너 | `/planner`·`/planner/:courseId` | `src/pages/Planner/Planner.tsx` | 구현됨. 결과 패널·코스 패널(DnD 정렬)·예산 대시보드·제목 인라인 편집(`EditableCourseTitle`). 코스 상세(GBC012)·저장(GBC016)·삭제(GBC013)·제목수정(GBC015) 연동. |
+| S2a POI 상세 드로어 | (S2 내부) | `src/components/planner/PoiDrawer.tsx`·`POICard.tsx` | UI 구현됨. POI 실데이터·상세 통합 조회(GBC017/018)는 백엔드 대기(⏸ 섬 P), 현재 목. |
+| S2b 로그인 게이트 모달 | (전역) | `src/components/planner/LoginGateModal.tsx` | 구현됨. 저장 시점 게이트+작업 이어하기(`useCourseSave`). `KakoLoginComponent` 재사용. |
+| S3 공유 뷰어 | `/share/:courseId` | `src/pages/Share/Share.tsx` + `routes/shareRouter.tsx` | 구현됨(GBC014). 가드 밖 공개뷰, `getPublicCourse`(순수 axios), 카카오 공유→클립보드 폴백. |
+| S4 컬렉션/마이 | `/collection` | `src/pages/Collection/Collection.tsx` | 구현됨(GBC011). 카드 그리드·4상태·삭제 버튼. 마이페이지(회원정보) 겸함은 섬 M(⏸ userId 계약 대기). |
+| S5/S6 인증 | `/auth/*` | `src/pages/Auth/*`, `src/components/auth/KakoLoginComponent.tsx` | 카카오 OAuth 위젯·`authStore` 세션·401 재발급 인터셉터 구현. |
+| S7 소개 | `/about` | `src/pages/About.tsx` | 스텁(콘텐츠 정비 필요 — 부록 A2). |
+| S8 404 | `*` | `src/components/layout/NotFoundLayout.tsx` | 구현됨. |
+| API 계층 | — | `src/api/` | `client`(인터셉터)·`auth`·`user`·`tourCourse`·`poi`·`types`. 관광공사 OpenAPI는 백엔드 담당. |
+| 상태 관리 | — | `src/stores/` | `authStore`·`plannerStore`·`sigunguStore`·`travelThemeStore`·`themeStore`·`toastStore`. |
+| 커스텀 훅 | — | `src/hooks/` | `useAsync` + `useCourseList`/`useCourseDetail`/`useCourseSave`/`useCourseDelete`/`useCourseTitle`/`useCourseShare`. |
 
-**신규 라우터**: `shareRouter.tsx`(default export `RouteObject[]`)를 추가하고 `router.tsx`에서 `...spread`. `/home`은 `router.tsx`에서 제거.
+> **`/home` 제거 완료**: 부록 A1에서 `router.tsx`·`src/pages/Home.tsx` 제거(메인과 역할 중복). `shareRouter.tsx`도 추가·`...spread` 완료.
 
 ---
 

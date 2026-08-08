@@ -14,7 +14,8 @@
 :root {
     --color-primary: #008080;
     --color-secondary: #FEE500;
-    background-color: #F8F9FF;
+    /* 루트(overscroll·초기 페인트) 배경은 테마 가변. 라이트=연회색, 다크=어두운 중립. */
+    background-color: var(--color-base-200);
 }
 
 .btn-circle {

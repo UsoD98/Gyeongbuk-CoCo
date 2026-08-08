@@ -3,6 +3,7 @@ import { Check, Plus } from 'lucide-react';
 
 import CatBadge from '@/components/planner/parts/CatBadge.tsx';
 import ImgPlaceholder from '@/components/planner/parts/ImgPlaceholder.tsx';
+import LikeButton from '@/components/planner/LikeButton.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
 import { won } from '@/utils/format.ts';
 import { cn } from '@/utils/cn.ts';
@@ -75,6 +76,7 @@ export default function POICard({
           <div className="flex flex-wrap items-center gap-1.5">
             <CatBadge cat={poi.cat} />
             <Stars value={poi.rating} />
+            <LikeButton poiId={poi.id} size={14} className="btn-xs ml-auto" />
           </div>
           <div className="font-bold leading-tight">{poi.name}</div>
           <div className="line-clamp-1 text-sm text-base-content/60">{poi.desc}</div>
@@ -97,6 +99,9 @@ export default function POICard({
         <ImgPlaceholder label={poi.img} className="aspect-[16/10] w-full" />
         <div className="absolute left-2 top-2">
           <CatBadge cat={poi.cat} />
+        </div>
+        <div className="absolute right-2 top-2">
+          <LikeButton poiId={poi.id} className="btn-sm" />
         </div>
       </div>
       <div className="flex flex-col gap-2 p-3">

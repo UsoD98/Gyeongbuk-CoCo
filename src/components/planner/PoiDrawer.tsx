@@ -13,7 +13,9 @@ import type { LucideIcon } from 'lucide-react';
 
 import CatBadge from '@/components/planner/parts/CatBadge.tsx';
 import ImgPlaceholder from '@/components/planner/parts/ImgPlaceholder.tsx';
+import LikeButton from '@/components/planner/LikeButton.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
+import { usePoi } from '@/hooks/usePoi.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { won } from '@/utils/format.ts';
@@ -29,7 +31,9 @@ export default function PoiDrawer() {
   const activeDay = usePlannerStore((s) => s.activeDay);
   const closeDrawer = usePlannerStore((s) => s.closeDrawer);
   const addPoi = usePlannerStore((s) => s.addPoi);
-  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
+  // POI 데이터 소스는 usePoi 훅으로 캡슐화(P0). 현재는 스토어/목, P3(GBC018)에서 실상세로 교체.
+  // 훅은 조건부 호출 불가 → 최상단에서 호출(poiId 없으면 undefined).
+  const poi = usePoi(drawer.poiId);
 
   useEffect(() => {
     if (!drawer.open) return;
@@ -40,9 +44,7 @@ export default function PoiDrawer() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawer.open, closeDrawer]);
 
-  if (!drawer.open || !drawer.poiId) return null;
-  const poi = resolvePoi(drawer.poiId);
-  if (!poi) return null;
+  if (!drawer.open || !drawer.poiId || !poi) return null;
 
   const day = course.days[activeDay];
   const inDay = day?.items.includes(poi.id) ?? false;
@@ -100,6 +102,9 @@ export default function PoiDrawer() {
           </button>
           <div className="absolute bottom-3 left-3.5">
             <CatBadge cat={poi.cat} />
+          </div>
+          <div className="absolute bottom-3 right-3.5">
+            <LikeButton poiId={poi.id} size={18} className="btn-sm" />
           </div>
         </div>
 
