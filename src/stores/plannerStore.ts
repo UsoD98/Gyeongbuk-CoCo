@@ -71,6 +71,8 @@ interface PlannerState {
   loadDetail: (detail: CourseDetail) => void;
 
   setSearch: (patch: Partial<Search>) => void;
+  /** 코스 제목 변경(GBC015 낙관적 업데이트·롤백용). 서버 반영은 useCourseTitle 이 담당. */
+  setTitle: (title: string) => void;
   setActiveDay: (i: number) => void;
   /** index 가 주어지면 그 위치에 삽입, 없으면 맨 뒤에 추가 */
   addPoi: (poiId: string, index?: number) => void;
@@ -198,6 +200,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   },
 
   setSearch: (patch) => set((s) => ({ search: { ...s.search, ...patch } })),
+
+  setTitle: (title) => set((s) => ({ course: { ...s.course, title } })),
 
   setActiveDay: (i) => set({ activeDay: i }),
 
