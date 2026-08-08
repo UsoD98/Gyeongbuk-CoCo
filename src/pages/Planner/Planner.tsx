@@ -25,6 +25,12 @@ import { cn } from '@/utils/cn.ts';
 type MobileTab = 'results' | 'course' | 'budget';
 
 const PANEL_CARD = 'card flex flex-col overflow-hidden rounded-2xl bg-base-100 shadow-lg';
+// 데스크톱 패널 높이: 뷰포트에 맞춰 늘리되(헤더·요약·여백 ≈ 15rem 차감) 하한 500px·상한 780px로
+// clamp — 작은 화면에선 답답하지 않게, 큰 모니터에선 아래 여백이 과하지 않게 한다.
+const PANEL_H = 'h-[clamp(500px,calc(100vh_-_15rem),780px)]';
+// 코스 패널(좌) 너비: 320~400px 사이에서 컨테이너 비례(26%)로 유연하게 —
+// 중간 폭(1024~1280)에선 360px 고정보다 좁아져 결과 패널에 여유를 준다.
+const PANEL_GRID = 'grid grid-cols-[clamp(320px,26%,400px)_1fr] items-start gap-5';
 
 export default function Planner() {
   // /planner/:courseId 진입(목록 카드 클릭·URL 재진입) 시 상세를 불러와 스토어에 적재.
@@ -160,11 +166,11 @@ export default function Planner() {
       <div className="hidden flex-col gap-5 lg:flex">
         {summary}
         <PlannerDndProvider>
-          <div className="grid grid-cols-[360px_1fr] items-start gap-5">
-            <div className={cn(PANEL_CARD, 'h-[560px]')}>
+          <div className={PANEL_GRID}>
+            <div className={cn(PANEL_CARD, PANEL_H)}>
               <CoursePanel />
             </div>
-            <div className={cn(PANEL_CARD, 'h-[560px]')}>
+            <div className={cn(PANEL_CARD, PANEL_H)}>
               <ResultsPanel />
             </div>
           </div>
