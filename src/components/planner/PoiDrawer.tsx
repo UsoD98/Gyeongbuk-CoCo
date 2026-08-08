@@ -13,6 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 
 import CatBadge from '@/components/planner/parts/CatBadge.tsx';
 import ImgPlaceholder from '@/components/planner/parts/ImgPlaceholder.tsx';
+import LikeButton from '@/components/planner/LikeButton.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
 import { usePoi } from '@/hooks/usePoi.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
@@ -101,6 +102,9 @@ export default function PoiDrawer() {
           </button>
           <div className="absolute bottom-3 left-3.5">
             <CatBadge cat={poi.cat} />
+          </div>
+          <div className="absolute bottom-3 right-3.5">
+            <LikeButton poiId={poi.id} size={18} className="btn-sm" />
           </div>
         </div>
 

@@ -17,6 +17,7 @@ import { useCourseSave } from '@/hooks/useCourseSave.ts';
 import { useCourseShare } from '@/hooks/useCourseShare.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
+import { useLoginGateStore } from '@/stores/loginGateStore.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { cn } from '@/utils/cn.ts';
@@ -42,10 +43,12 @@ export default function Planner() {
   const { sharing, share } = useCourseShare();
 
   const [tab, setTab] = useState<MobileTab>('results');
-  const [gate, setGate] = useState<{ open: boolean; label: string | null }>({
-    open: false,
-    label: null,
-  });
+  // 로그인 게이트는 전역 스토어(loginGateStore)로 승격 — 저장/공유뿐 아니라 결과 카드·드로어의
+  // 찜 버튼(GBC019)도 깊은 트리에서 게이트를 열 수 있게 한다. 모달은 여기서 한 번만 렌더.
+  const gateOpen = useLoginGateStore((s) => s.open);
+  const gateLabel = useLoginGateStore((s) => s.label);
+  const openGate = useLoginGateStore((s) => s.openGate);
+  const closeGate = useLoginGateStore((s) => s.closeGate);
 
   const courseCount = course.days.reduce((a, d) => a + d.items.length, 0);
   const nights = nightsFromRange(search.start, search.end);
@@ -92,7 +95,7 @@ export default function Planner() {
   }
 
   // 저장 = 코스 소유권 이전(GBC016). 비로그인이면 로그인 게이트를 열고, 복귀 후 자동 저장된다.
-  const onSave = () => save(() => setGate({ open: true, label: '저장' }));
+  const onSave = () => save(() => openGate('저장'));
   // 공유(GBC014) = 공개뷰 링크 생성. 로그인 불필요(수신자만 비로그인 열람) → 게이트 없이 즉시.
   const onShare = () => void share();
 
@@ -214,11 +217,7 @@ export default function Planner() {
       </div>
 
       <PoiDrawer />
-      <LoginGateModal
-        open={gate.open}
-        label={gate.label}
-        onClose={() => setGate({ open: false, label: null })}
-      />
+      <LoginGateModal open={gateOpen} label={gateLabel} onClose={closeGate} />
     </>
   );
 }

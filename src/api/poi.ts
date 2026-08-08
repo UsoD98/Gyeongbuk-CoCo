@@ -7,6 +7,8 @@
  *   백엔드 확정 시 P2/P3(섬 P)에서 교정한다. docs/FE_계약_추적표.md 참조.
  */
 
+import { apiClient } from '@/api/client.ts';
+import type { ApiResponse } from '@/api/types.ts';
 import type { PoiCat } from '@/types/planner.ts';
 
 /**
@@ -81,4 +83,21 @@ export interface TogglePoiLikeResponse {
   liked: boolean;
   /** 해당 POI의 총 좋아요 수 */
   likes: number;
+}
+
+// ── API 함수 ───────────────────────────────────────────────
+
+/**
+ * POST /poi/{contentId}/like — POI 좋아요 토글 (GBC019). 로그인 필수(Bearer).
+ * 응답 data 는 `{ liked, likes }`(백엔드 `PoiLikeResponseDto` 실측). 스펙 `완료`.
+ * ⚠️ `contentId` 는 실 TourAPI 콘텐츠 id(양수). 목 POI(슬러그 id)에는 실 contentId 가 없어
+ *    호출부(`usePoiLike`)에서 서버 호출을 건너뛴다 — 실동작은 POI 실데이터(P2/P3) 이후 완결.
+ */
+export async function togglePoiLike(
+  contentId: number,
+): Promise<TogglePoiLikeResponse> {
+  const { data } = await apiClient.post<ApiResponse<TogglePoiLikeResponse>>(
+    `/poi/${contentId}/like`,
+  );
+  return data.data;
 }
