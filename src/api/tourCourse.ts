@@ -147,3 +147,19 @@ export async function assignCourse(courseId: number): Promise<void> {
 export async function deleteCourse(courseId: number): Promise<void> {
   await apiClient.delete<ApiResponse<null>>(`/tour-course/${courseId}`);
 }
+
+/**
+ * PATCH /tour-course/{courseId}/title — 코스 제목 수정 (GBC015). 소유자 인증 필수(Bearer).
+ * 응답 data 는 null. 성공 시 호출부에서 낙관적 업데이트를 확정(실패 시 롤백)한다.
+ * ⚠️ title 은 255자 이하(스펙). 소유자가 아니면 백엔드가 401/403 을 반환한다(401 은 client 인터셉터가 처리).
+ */
+export async function updateCourseTitle(
+  courseId: number,
+  title: string,
+): Promise<void> {
+  const body: UpdateCourseTitleRequest = { title };
+  await apiClient.patch<ApiResponse<null>>(
+    `/tour-course/${courseId}/title`,
+    body,
+  );
+}

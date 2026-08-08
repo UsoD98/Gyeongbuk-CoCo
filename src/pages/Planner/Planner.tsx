@@ -7,6 +7,7 @@ import ErrorState from '@/components/common/ErrorState.tsx';
 import Loading from '@/components/common/Loading.tsx';
 import BudgetDashboard from '@/components/planner/BudgetDashboard.tsx';
 import CoursePanel from '@/components/planner/CoursePanel.tsx';
+import EditableCourseTitle from '@/components/planner/EditableCourseTitle.tsx';
 import LoginGateModal from '@/components/planner/LoginGateModal.tsx';
 import PlannerDndProvider from '@/components/planner/PlannerDndProvider.tsx';
 import PoiDrawer from '@/components/planner/PoiDrawer.tsx';
@@ -101,9 +102,12 @@ export default function Planner() {
   const summary = (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-base-100 p-4 shadow-lg sm:p-5">
       <div className="flex min-w-0 flex-col gap-1">
-        <h1 className="truncate text-lg font-extrabold sm:text-xl">
-          {course.title}
-        </h1>
+        {/* 소유 코스(로그인 + 저장된 courseId)면 제목을 인라인 편집(GBC015). */}
+        <EditableCourseTitle
+          title={course.title}
+          editable={isAuthenticated && storeCourseId != null}
+          courseId={storeCourseId}
+        />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/60">
           <span className="flex items-center gap-1">
             <MapPin size={14} className="text-primary" />
