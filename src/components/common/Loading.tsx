@@ -2,9 +2,9 @@ import React from 'react';
 
 const Loading: React.FC = () => {
   return (
-    <div className="mx-auto flex flex-col items-center justify-center space-y-3 py-12 text-slate-500">
+    <div className="mx-auto flex flex-col items-center justify-center space-y-3 py-12 text-base-content/60">
       <svg
-        className="h-6 w-6 animate-spin text-indigo-500"
+        className="h-6 w-6 animate-spin text-primary"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"

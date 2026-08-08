@@ -51,15 +51,18 @@
 
 ### 2.3 배경
 
-- 페이지 배경(루트): `#F8F9FF` — `:root { background-color: #F8F9FF; }` 및 `<main>`의 `bg-[#F8F9FF]`.
-- 카드/입력 배경: `bg-white`.
-- 보조 영역(Footer): daisyUI 시맨틱 `bg-base-300`.
+> **테마 가변 필수** — 고정색(`#F8F9FF`·`bg-white`) 금지. daisyUI 시맨틱 토큰만 쓴다. 상세 매핑은 §6.7.
+
+- 페이지 배경(루트·`<main>`): `bg-base-200` — `:root { background-color: var(--color-base-200); }` 및 `<main>`의 `bg-base-200`. 라이트=연회색, 다크=어두운 중립.
+- 카드/입력 배경: `bg-base-100` (페이지 base-200 위에 뜬다).
+- 보조 영역(Footer): `bg-base-300`.
 
 ### 2.4 텍스트
 
-- 본문: 기본 (`text-base-content`).
-- 보조: `text-gray-500` / `text-gray-700` (입력 라벨, 부가 설명).
-- 강조 위(primary 배경): `text-primary-50`.
+- 본문 강조: `text-base-content`.
+- 보조(입력 라벨·부가 설명): `text-base-content/60`.
+- 마이크로카피: `text-base-content/50`.
+- 강조 위(primary 등 컬러 배경): `text-primary-50` 또는 `text-white`(항상 어두운 브랜드 배경 위에 한함).
 
 ---
 
@@ -78,8 +81,8 @@
 | 페이지 헤드라인 | `text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold` |
 | 섹션 타이틀 | `text-lg md:text-2xl font-bold` |
 | 본문 | `text-sm md:text-base` |
-| 보조/라벨 | `text-xs font-semibold text-gray-500` |
-| 마이크로카피 | `text-xs text-gray-400` |
+| 보조/라벨 | `text-xs font-semibold text-base-content/60` |
+| 마이크로카피 | `text-xs text-base-content/50` |
 
 ---
 
@@ -167,10 +170,10 @@ btn-ghost btn-sm          아이콘 버튼 (네비게이션 우측)
 
 ### 6.4 입력
 
-- 텍스트 입력: 기본 `border-white bg-transparent focus:border-primary`.
+- 텍스트 입력: 기본 `bg-transparent focus:border-primary`.
 - DatePicker: `react-datepicker` + `selectsRange`. 헤더 색은 `index.css`에서 `--color-primary-500` 배경 / `--color-primary-50` 텍스트로 오버라이드.
 - 체크박스: daisyUI `checkbox checkbox-sm checkbox-primary`.
-- 드롭다운 패널: `rounded-xl border border-gray-200 bg-white p-2 shadow-lg`.
+- 드롭다운 패널: `rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg` (테마 가변).
 
 ### 6.5 Footer
 
@@ -178,7 +181,7 @@ btn-ghost btn-sm          아이콘 버튼 (네비게이션 우측)
 
 ### 6.6 Loading
 
-`src/components/common/Loading.tsx`. 인디고 spin SVG + 한국어 메시지("데이터를 불러오는 중입니다…"). Suspense fallback으로 사용.
+`src/components/common/Loading.tsx`. `text-primary`(브랜드 teal) spin SVG + `text-base-content/60` 한국어 메시지("데이터를 불러오는 중입니다…"). Suspense fallback으로 사용. 색은 테마 가변.
 
 ### 6.7 오버레이·모션·시맨틱 색 (플래너 기준)
 
