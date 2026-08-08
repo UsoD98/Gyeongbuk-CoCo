@@ -104,6 +104,17 @@ export async function createCourse(
 }
 
 /**
+ * GET /tour-course — 로그인 사용자의 저장 코스 목록 (GBC011). 인증 필수(Bearer).
+ * 응답 data 는 `CourseSummary[]`(각 항목은 헤더 정보만, 일정 상세는 없음).
+ */
+export async function getMyCourses(): Promise<CourseSummary[]> {
+  const { data } = await apiClient.get<ApiResponse<CourseSummary[]>>(
+    '/tour-course',
+  );
+  return data.data;
+}
+
+/**
  * PATCH /tour-course/{courseId}/assign — 코스 소유권 이전(= "저장").
  * 비로그인으로 생성된 코스(userId=null)를 현재 로그인 사용자에게 귀속시킨다. 인증 필수(Bearer).
  * 응답 data 는 null.
