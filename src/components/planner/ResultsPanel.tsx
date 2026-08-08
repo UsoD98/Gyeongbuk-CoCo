@@ -6,7 +6,7 @@ import MapView from '@/components/planner/MapView.tsx';
 import POICard from '@/components/planner/POICard.tsx';
 import { resultDragId } from '@/components/planner/dnd.ts';
 import EmptyState from '@/components/planner/parts/EmptyState.tsx';
-import { POIS, REGIONS, paxBucket } from '@/mocks/planner.ts';
+import { usePoiList } from '@/hooks/usePoiList.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { cn } from '@/utils/cn.ts';
@@ -49,22 +49,6 @@ const CAT_CHIPS = [
   ['culture', '문화'],
 ] as const;
 
-/** 검색조건(목적지·인원·테마)으로 POI 필터 + 테마 매칭 우선 정렬 */
-function filterPois(dests: string[], pax: number, themes: string[]): Poi[] {
-  const bucket = paxBucket(pax);
-  let list = POIS.filter(
-    (p) => dests.includes(p.region) && p.buckets.includes(bucket),
-  );
-  if (themes.length) {
-    list = [...list].sort((a, b) => {
-      const am = a.themes.some((t) => themes.includes(t)) ? 0 : 1;
-      const bm = b.themes.some((t) => themes.includes(t)) ? 0 : 1;
-      return am - bm;
-    });
-  }
-  return list;
-}
-
 export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const search = usePlannerStore((s) => s.search);
   const course = usePlannerStore((s) => s.course);
@@ -77,15 +61,17 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [cat, setCat] = useState<string>('all');
 
-  const pois = filterPois(search.dests, search.pax, search.themes);
+  // POI 데이터 소스는 usePoiList 훅으로 캡슐화(P0). 현재는 목, P2(GBC017)에서 서버로 교체.
+  const { pois, ready } = usePoiList({
+    dests: search.dests,
+    pax: search.pax,
+    themes: search.themes,
+  });
   // search.dests 는 시군구 코드. 지역명은 sigunguStore 로 해석한다.
   // (mock POI 필터·ready 게이트는 슬러그 기반이라 실 POI 목록(P2)에서 대체 예정)
   const regionName = search.dests.length
     ? getSigunguLabel(search.dests[0])
     : undefined;
-  const ready = search.dests.some(
-    (d) => REGIONS.find((r) => r.code === d)?.ready,
-  );
   const shown = cat === 'all' ? pois : pois.filter((p) => p.cat === cat);
   const inDay = (id: string) =>
     course.days[activeDay]?.items.includes(id) ?? false;

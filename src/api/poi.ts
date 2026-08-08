@@ -7,6 +7,8 @@
  *   백엔드 확정 시 P2/P3(섬 P)에서 교정한다. docs/FE_계약_추적표.md 참조.
  */
 
+import type { PoiCat } from '@/types/planner.ts';
+
 /**
  * 콘텐츠 유형 (12:관광지 / 14:문화시설 / 32:숙박 / 39:음식점).
  * FE `PoiCat`(4종) 대응값만 정의. 백엔드 `PlaceType`엔 15(축제)/28(레포츠)/38(쇼핑)도 있어
@@ -15,15 +17,26 @@
 export type ContentTypeId = 12 | 14 | 32 | 39;
 
 /**
- * 목업 POI 카테고리(@/types/planner.ts `PoiCat`) ↔ 스펙 `contentTypeId` 매핑.
- * P0에서 목→API 전환 시 이 표로 양방향 변환한다.
+ * FE `PoiCat`(sight/culture/stay/food) → 스펙 `contentTypeId`(12/14/32/39).
+ * 목→API 전환 시 UI 카테고리 칩·필터를 스펙 파라미터(`contentTypeId`)로 보낼 때 쓴다.
  */
 export const CONTENT_TYPE_BY_CAT = {
   sight: 12,
   culture: 14,
   stay: 32,
   food: 39,
-} as const satisfies Record<string, ContentTypeId>;
+} as const satisfies Record<PoiCat, ContentTypeId>;
+
+/**
+ * 역방향: 스펙 `contentTypeId`(12/14/32/39) → FE `PoiCat`.
+ * P2/P3 응답(`contentTypeId` 포함)을 UI `Poi.cat`으로 변환할 때 쓴다.
+ */
+export const CAT_BY_CONTENT_TYPE = {
+  12: 'sight',
+  14: 'culture',
+  32: 'stay',
+  39: 'food',
+} as const satisfies Record<ContentTypeId, PoiCat>;
 
 /** GET /poi 쿼리 파라미터 (GBC017) */
 export interface PoiListParams {
