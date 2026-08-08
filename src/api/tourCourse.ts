@@ -137,3 +137,13 @@ export async function getCourse(courseId: number): Promise<CourseDetail> {
 export async function assignCourse(courseId: number): Promise<void> {
   await apiClient.patch<ApiResponse<null>>(`/tour-course/${courseId}/assign`);
 }
+
+/**
+ * DELETE /tour-course/{courseId} — 코스 전체 삭제 (GBC013). 소유자 인증 필수(Bearer).
+ * 응답 data 는 null. 성공 시 호출부에서 목록을 재조회한다.
+ * ⚠️ 코스 **전체** 삭제다. 플래너의 POI 단위 제거(`removePoi`)와 혼동 금지.
+ * ⚠️ 소유자가 아니면 백엔드가 401/403 을 반환한다(401 은 client 인터셉터가 처리).
+ */
+export async function deleteCourse(courseId: number): Promise<void> {
+  await apiClient.delete<ApiResponse<null>>(`/tour-course/${courseId}`);
+}
