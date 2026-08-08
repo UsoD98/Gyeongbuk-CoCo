@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 
-import type { CoursePlace, CreateCourseResponse } from '@/api/tourCourse.ts';
+import type {
+  CourseDetail,
+  CoursePlace,
+  CreateCourseResponse,
+} from '@/api/tourCourse.ts';
 import { CATEGORIES, poiById } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
 import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
@@ -63,6 +67,8 @@ interface PlannerState {
   resolvePoi: (id: string) => Poi | undefined;
   /** GBC010 생성 응답을 스토어에 주입(부팅 목업 대체). */
   loadFromApi: (res: CreateCourseResponse, ctx: LoadFromApiContext) => void;
+  /** GBC012 코스 상세 응답을 스토어에 주입(목록 카드 클릭·URL 재진입). */
+  loadDetail: (detail: CourseDetail) => void;
 
   setSearch: (patch: Partial<Search>) => void;
   setActiveDay: (i: number) => void;
@@ -89,16 +95,18 @@ const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
 };
 
 /**
- * 생성 응답의 장소(seq/time/type/contentId)를 UI Poi placeholder 로 변환.
- * 이름/가격/좌표/평점은 생성 응답에 없어 임시값 — POI 상세(GBC018) 연동 시 실데이터로 대체된다.
+ * 코스 장소(seq/time/type/contentId)를 UI Poi placeholder 로 변환.
+ * 가격/좌표/평점은 생성·상세 응답에 없어 임시값 — POI 상세(GBC018) 연동 시 실데이터로 대체된다.
+ * 이름은 상세(GBC012)엔 `placeName`이 있어 실명을, 생성(GBC010)엔 없어 `장소 #id`를 쓴다.
  */
 function synthesizePoi(place: CoursePlace, region: string): Poi {
   const cat = PLACE_TYPE_TO_CAT[place.type] ?? 'sight';
   const time = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
+  const name = place.placeName?.trim() || `장소 #${place.contentId}`;
   return {
     id: String(place.contentId),
     region,
-    name: `장소 #${place.contentId}`,
+    name,
     cat,
     themes: [],
     buckets: [1, 2, '3-4'],
@@ -150,6 +158,38 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
         end: ctx.end,
         pax: ctx.pax,
         themes: ctx.themes,
+      },
+      activeDay: 0,
+      overrides: {},
+      drawer: { open: false, poiId: null },
+    });
+  },
+
+  loadDetail: (detail) => {
+    const apiPois: Record<string, Poi> = {};
+    const days: CourseDay[] = detail.schedule.map((day, i) => {
+      const places = [...day.places].sort((a, b) => a.seq - b.seq);
+      const items: string[] = [];
+      places.forEach((place) => {
+        const key = String(place.contentId);
+        // 상세 응답엔 지역 필드가 없어 region 은 빈 문자열(요약 지역명은 '경상북도' 폴백).
+        apiPois[key] = synthesizePoi(place, '');
+        // 하루 내 동일 contentId 중복 방지(loadFromApi 와 동일 불변식).
+        if (!items.includes(key)) items.push(key);
+      });
+      return { label: `Day ${i + 1}`, items };
+    });
+    set({
+      courseId: detail.courseId,
+      apiPois,
+      course: { title: detail.title, days },
+      search: {
+        // 상세 응답엔 sigunguCode/지역이 없다 → dests 비움(Planner 는 '경상북도'로 폴백).
+        dests: [],
+        start: detail.startDate,
+        end: detail.endDate,
+        pax: detail.peopleCount,
+        themes: detail.theme,
       },
       activeDay: 0,
       overrides: {},

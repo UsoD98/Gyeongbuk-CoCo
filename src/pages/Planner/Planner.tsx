@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Bookmark, Calendar, Compass, MapPin, Share2, Users } from 'lucide-react';
 
+import { getApiErrorMessage } from '@/api/types.ts';
+import ErrorState from '@/components/common/ErrorState.tsx';
+import Loading from '@/components/common/Loading.tsx';
 import BudgetDashboard from '@/components/planner/BudgetDashboard.tsx';
 import CoursePanel from '@/components/planner/CoursePanel.tsx';
 import LoginGateModal from '@/components/planner/LoginGateModal.tsx';
 import PlannerDndProvider from '@/components/planner/PlannerDndProvider.tsx';
 import PoiDrawer from '@/components/planner/PoiDrawer.tsx';
 import ResultsPanel from '@/components/planner/ResultsPanel.tsx';
+import { useCourseDetail } from '@/hooks/useCourseDetail.ts';
 import { useCourseSave } from '@/hooks/useCourseSave.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
@@ -21,8 +25,15 @@ type MobileTab = 'results' | 'course' | 'budget';
 const PANEL_CARD = 'card flex flex-col overflow-hidden rounded-2xl bg-base-100 shadow-lg';
 
 export default function Planner() {
+  // /planner/:courseId 진입(목록 카드 클릭·URL 재진입) 시 상세를 불러와 스토어에 적재.
+  // index 라우트(게스트 생성 직후)면 param 이 없어 훅은 fetch 없이 idle 로 끝난다.
+  const { courseId: courseIdParam } = useParams();
+  const { error: detailError, reload: reloadDetail } =
+    useCourseDetail(courseIdParam);
+
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
+  const storeCourseId = usePlannerStore((s) => s.courseId);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
 
@@ -41,6 +52,24 @@ export default function Planner() {
   const regionName = search.dests.length
     ? (getSigunguLabel(search.dests[0]) ?? '경상북도')
     : '경상북도';
+
+  // /planner/:courseId 인데 그 코스가 아직 스토어에 없으면 로딩/에러를 먼저 처리한다.
+  // 판정 기준은 로딩 플래그가 아니라 "스토어가 이 코스를 들고 있는가"다 —
+  // 그래야 다른 코스로 URL 이 바뀌는 순간 이전 코스가 새 URL 아래 스치듯 렌더되지 않는다.
+  // (스토어에 이미 있으면 — 게스트 생성 직후 등 — 즉시 렌더하고 상세는 백그라운드로 갱신.)
+  const paramId = courseIdParam ? Number(courseIdParam) : null;
+  const hasParamCourse = paramId != null && storeCourseId === paramId;
+  if (courseIdParam && !hasParamCourse) {
+    if (detailError) {
+      return (
+        <ErrorState
+          description={getApiErrorMessage(detailError, '코스를 불러오지 못했어요')}
+          onRetry={reloadDetail}
+        />
+      );
+    }
+    return <Loading />;
+  }
 
   // 코스 미생성(직접 진입·새로고침으로 인메모리 상태 소실). 유령 요약/예산 대신 안내.
   if (course.days.length === 0) {

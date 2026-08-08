@@ -115,6 +115,19 @@ export async function getMyCourses(): Promise<CourseSummary[]> {
 }
 
 /**
+ * GET /tour-course/{courseId} — 코스 상세 조회 (GBC012). 소유자 인증 필수(Bearer).
+ * 응답 data 는 `CourseDetail`(헤더 + `schedule[].places[]`, 장소마다 `placeName` 포함).
+ * 목록·생성 응답과 달리 실제 장소명이 담기므로 placeholder 없이 렌더할 수 있다.
+ * ⚠️ 소유자가 아니면 백엔드가 401/403 을 반환한다(401 은 client 인터셉터가 처리).
+ */
+export async function getCourse(courseId: number): Promise<CourseDetail> {
+  const { data } = await apiClient.get<ApiResponse<CourseDetail>>(
+    `/tour-course/${courseId}`,
+  );
+  return data.data;
+}
+
+/**
  * PATCH /tour-course/{courseId}/assign — 코스 소유권 이전(= "저장").
  * 비로그인으로 생성된 코스(userId=null)를 현재 로그인 사용자에게 귀속시킨다. 인증 필수(Bearer).
  * 응답 data 는 null.
