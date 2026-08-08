@@ -34,6 +34,9 @@ interface Props {
   compact?: boolean;
   onSave?: () => void;
   onShare?: () => void;
+  /** 코스 저장(GBC016) 진행/완료 상태 — 저장 버튼 비활성화·라벨 반영용 */
+  saving?: boolean;
+  saved?: boolean;
 }
 
 /** 예산 대시보드 (bars 변형). 입력은 store 의 course+pax+overrides 에서 파생 계산. */
@@ -41,6 +44,8 @@ export default function BudgetDashboard({
   compact = false,
   onSave,
   onShare,
+  saving = false,
+  saved = false,
 }: Props) {
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
@@ -96,8 +101,14 @@ export default function BudgetDashboard({
                 type="button"
                 className="btn btn-sm btn-outline gap-1"
                 onClick={onSave}
+                disabled={saving || saved}
               >
-                <Bookmark size={16} />저장
+                {saving ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <Bookmark size={16} />
+                )}
+                {saved ? '저장됨' : '저장'}
               </button>
             )}
             {onShare && (

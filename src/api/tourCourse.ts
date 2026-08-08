@@ -97,3 +97,14 @@ export async function createCourse(
   );
   return data.data;
 }
+
+/**
+ * PATCH /tour-course/{courseId}/assign — 코스 소유권 이전(= "저장").
+ * 비로그인으로 생성된 코스(userId=null)를 현재 로그인 사용자에게 귀속시킨다. 인증 필수(Bearer).
+ * 응답 data 는 null.
+ * ⚠️ 이미 소유자가 있는 코스면 백엔드가 403("이미 소유자가 있는 코스입니다")을 반환한다 →
+ *    호출부에서 중복 저장을 막을 것(useCourseSave 의 saved 가드).
+ */
+export async function assignCourse(courseId: number): Promise<void> {
+  await apiClient.patch<ApiResponse<null>>(`/tour-course/${courseId}/assign`);
+}
