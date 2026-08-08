@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -40,6 +40,37 @@ const TRANSPORT_OPTIONS: { value: Transport; label: string }[] = [
   { value: 'PUBLIC_TRANSPORT', label: '대중교통' },
   { value: 'WALK', label: '도보' },
 ];
+
+/**
+ * 일정 DatePicker 의 커스텀 입력(트리거).
+ * react-datepicker 가 `dateFormat="MM/dd"` 로 만든 값이 range 면 "MM/dd - MM/dd" 인데,
+ * 구분자만 "~" 로 바꿔 "MM/dd ~ MM/dd" 로 짧게 표시한다 — 연도를 빼 좁은 검색바 칸에서도
+ * 날짜가 잘리지 않게 하는 것이 목적. 값이 없으면 placeholder 를 흐리게 렌더.
+ */
+const DateTrigger = forwardRef<
+  HTMLButtonElement,
+  { value?: string; onClick?: () => void }
+>(({ value, onClick }, ref) => {
+  const display = value ? value.replace(' - ', ' ~ ') : '일정을 선택해주세요';
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      className="flex w-full min-w-0 cursor-pointer items-center rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
+    >
+      <span
+        className={cn(
+          'block min-w-0 flex-1 truncate',
+          !value && 'text-base-content/50',
+        )}
+      >
+        {display}
+      </span>
+    </button>
+  );
+});
+DateTrigger.displayName = 'DateTrigger';
 
 export default function Index() {
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>(
@@ -228,9 +259,9 @@ export default function Index() {
             </p>
           </div>
         </div>
-        <div className="flex w-full max-w-6xl flex-col gap-3 rounded-2xl bg-base-100 p-3 shadow-lg lg:flex-row lg:items-center lg:gap-4 lg:rounded-full lg:p-4">
+        <div className="flex w-full max-w-6xl flex-col gap-3 rounded-2xl bg-base-100 p-3 shadow-lg lg:flex-row lg:items-center lg:gap-2 lg:rounded-full lg:p-4">
           {/* 목적지 */}
-          <div className="flex flex-1 items-center gap-2 px-3 lg:px-4">
+          <div className="flex flex-1 items-center gap-2 px-3 lg:flex-[1.3] lg:px-3">
             <MapPin size={20} className="shrink-0 text-base-content/40" />
             <div ref={destinationDropdownRef} className="w-full min-w-0">
               <div className="text-xs font-semibold text-base-content/60">
@@ -297,7 +328,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 일정 */}
-          <div className="flex flex-1 items-center gap-2 px-3 lg:px-4">
+          <div className="flex flex-1 items-center gap-2 px-3 lg:px-3">
             <Calendar size={20} className="shrink-0 text-base-content/40" />
             <div className="w-full">
               <div className="text-xs font-semibold text-base-content/60">
@@ -313,9 +344,8 @@ export default function Index() {
                     : [dates, null];
                   setDateRange([start, end]);
                 }}
-                placeholderText="일정을 선택해주세요"
-                dateFormat="yyyy/MM/dd"
-                className="w-full cursor-pointer rounded border-0 bg-transparent text-left text-xs font-medium text-base-content outline-none sm:text-sm"
+                dateFormat="MM/dd"
+                customInput={<DateTrigger />}
                 calendarClassName="custom-datepicker-calendar"
               />
             </div>
@@ -324,7 +354,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 인원 */}
-          <div className="flex flex-1 items-center gap-2 px-3 lg:px-4">
+          <div className="flex flex-1 items-center gap-2 px-3 lg:px-3">
             <Users size={20} className="shrink-0 text-base-content/40" />
             <div className="w-full">
               <div className="text-xs font-semibold text-base-content/60">
@@ -371,7 +401,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 이동수단 */}
-          <div className="relative flex flex-1 items-center gap-2 px-3 lg:px-4">
+          <div className="relative flex flex-1 items-center gap-2 px-3 lg:px-3">
             <Car size={20} className="shrink-0 text-base-content/40" />
             <div ref={transportDropdownRef} className="w-full min-w-0">
               <div className="text-xs font-semibold text-base-content/60">
@@ -435,7 +465,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 테마 선택 */}
-          <div className="relative flex flex-1 items-center gap-2 px-3 lg:px-4">
+          <div className="relative flex flex-1 items-center gap-2 px-3 lg:flex-[1.3] lg:px-3">
             <TableProperties size={20} className="shrink-0 text-base-content/40" />
             <div ref={themeDropdownRef} className="w-full min-w-0">
               <div className="text-xs font-semibold text-base-content/60">
