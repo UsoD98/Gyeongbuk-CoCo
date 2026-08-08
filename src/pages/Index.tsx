@@ -17,7 +17,7 @@ import { createCourse } from '@/api/tourCourse.ts';
 import type { Transport } from '@/api/tourCourse.ts';
 import { getApiErrorMessage } from '@/api/types.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
-import { GYEONGBUK_AREA_CODE, useSigunguStore } from '@/stores/sigunguStore.ts';
+import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { useTravelThemeStore } from '@/stores/travelThemeStore.ts';
 import { cn } from '@/utils/cn.ts';
@@ -176,10 +176,11 @@ export default function Index() {
       return;
     }
 
-    // 계약(docs/FE_계약_추적표.md #2): sigunguCode 는 법정동 시군구 코드 단일값(경북 접두 47).
-    // 목적지 UI는 복수 선택이나 스펙은 단일 → 첫 선택만 전송(미선택 시 백엔드 전체 조회).
-    const sigunguCode = selectedDestinations.length
-      ? `${GYEONGBUK_AREA_CODE}${selectedDestinations[0]}`
+    // 계약(docs/FE_계약_추적표.md #2): sigunguCodes 는 법정동 시군구 코드(3자리 bare, 예 '130').
+    // 실측 확정 — 접두 '47' 없이 sigunguStore value 그대로, 복수 허용. 목적지 UI가 복수 선택이므로
+    // 선택 전부를 전송한다(미선택 시 생략 → 백엔드가 경북 전역에서 선정).
+    const sigunguCodes = selectedDestinations.length
+      ? selectedDestinations
       : undefined;
 
     setIsSubmitting(true);
@@ -190,7 +191,7 @@ export default function Index() {
         endDate: end,
         transport,
         theme: selectedThemeLabels, // 계약(#3): 한국어 라벨 전송(코드/목id 금지)
-        sigunguCode,
+        sigunguCodes,
       });
       const destLabel = selectedDestinations.length
         ? getSigunguLabel(selectedDestinations[0])
