@@ -49,7 +49,8 @@ function CourseCard({ course }: { course: CourseSummary }) {
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <h3 className="line-clamp-2 text-lg font-bold text-base-content">
-            {course.title}
+            {/* AI 생성 코스는 제목이 비어 있다(제목 지정=GBC015 이후). 빈 제목 폴백. */}
+            {course.title?.trim() || 'AI 추천 코스'}
           </h3>
           <span className="shrink-0 text-xs text-base-content/50">
             {formatCreatedAt(course.createdAt)}
