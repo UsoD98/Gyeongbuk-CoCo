@@ -65,7 +65,16 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - ✅ 상세/뷰의 `placeName`은 항상 문자열(빈값 `""` 가능), 목록/생성 응답엔 없음(`TourCourseServiceImpl.buildCourseResponse:167`).
 - ✅ 게스트 생성(email null→userId null) → `assign`은 소유자 없을 때만 1회 허용(`TourCourseServiceImpl.assignCourse:203`). Step 1→2 흐름 그대로 작동.
 - ✅ POI 좋아요 응답 `{liked, likes}` → FE `TogglePoiLikeResponse`에 `likes` 반영(`PoiLikeResponseDto.java`).
-- ⏸ `GBC020`(PATCH `/tour-course/{courseId}`) 컨트롤러 미구현 → **S8 대기**. `GET /poi/{contentId}` 미구현 → **P3 대기**.
+- ✅ `GBC020`(PATCH `/tour-course/{courseId}`) **구현·라이브 검증 완료(2026-08-15)** — 백엔드 `TourCourseController.updateCourse` + `TourCourseServiceImpl.updateCourse` 실측. 코스 39로 편집→저장→재진입까지 200 확인.
+  - 바디 = `{ "schedule": [...] }` — **전체 교체**(diff 아님). 하루 = `{date:'yyyy-MM-dd', places:[...]}`.
+  - 장소 = `{seq, time:'HH:mm:ss', type(PlaceType), contentId, contentName, durationMinutes, thumbnailImg, operatingHours, cost}`. 조회 응답과 같은 모양이되 **장소명 키는 `contentName`**(`placeName` 아님), `operatingHours`/`thumbnailImg`/`cost` 는 nullable.
+  - 헤더 `Authorization: Bearer` 필수, 경로 `courseId`(Long). 응답 = 공통 봉투(`data` 는 "완료 데이터"로만 명시 → FE는 값을 쓰지 않고 성공 여부만 본다).
+  - ⚠️ **백엔드가 실제로 저장하는 필드는 `seq`·`time`·`type`·`contentId`·`durationMinutes` 뿐이다**(실측 `TourCourseUpdateRequestDto.PlaceUpdate`). `contentName`·`thumbnailImg`·`operatingHours`·`cost` 는 "조회 전용 표시 필드"라 **의도적으로 무시**하고 TourAPI 라이브 조회로 재조립한다(`@JsonIgnoreProperties(ignoreUnknown = true)`).
+    → **결과: 사용자의 비용(예산) 편집은 서버에 영속되지 않는다.** 재진입하면 백엔드 타입별 기본값으로 돌아온다(라이브 실측: `cost 7000` 전송 → 재조회 `5000`). 영속이 필요하면 백엔드에 `cost` 저장 요청 필요.
+  - ⚠️ 검증 규칙(`validateUpdateRequest` 실측): ①`schedule` 비어 있으면 400 ②**Day 마다 장소 1곳 이상**(`@NotEmpty` → 400 "일정에 최소 한 개의 장소가 필요합니다") ③`date` 는 코스 `startDate~endDate` 범위 안 ④`type` 은 유효한 `PlaceType` ⑤`contentId` 는 백엔드 후보 목록(`tourLiveDataService.getAllCandidates`)에 있어야 한다. FE는 ②를 보내기 전에 막고 어느 Day 인지 toast 로 알린다(`useCourseUpdate`).
+  - ⚠️ **인증 없이 호출하면 401 이 아니라 500** 이 온다(실측). 매핑 존재 여부를 상태코드로 추정하지 말 것.
+  - ⚠️ FE 조립 규칙(`utils/coursePayload`): UI 코스에 없는 원본 필드는 `plannerStore.baseSchedule`(응답 원본)에서 복원하고, 새로 담은 장소는 카탈로그 Poi 로 채운다. 방문 시각은 **그 날 원본 시각 슬롯을 순번대로 배분**(재정렬해도 시각이 역전되지 않음). 예산 override(총액)는 `cost`(1인 기준)로 환산해 보낸다(백엔드가 무시하더라도 계약대로 전송).
+- ⏸ `GET /poi/{contentId}` 미구현 → **P3 대기**.
 - ✅ **`GET /poi`(GBC017) 구현 확인(백엔드 v0.5.1, 2026-08-15)** — P2 완료. 응답 `{available, items[{contentId, contentTypeId, title, mapx, mapy, thumbnail, avgPrice}]}`(`PoiCurationResponseDto`/`PoiCurationItemDto`). 파라미터는 `sigunguCode`(단수·필수)·`peopleCount`(필수, **검증만 하고 필터엔 미사용**)·`contentTypeId`(선택). 인증 불필요(`SecurityConfig` permitAll).
   - ⚠️ **`theme` 파라미터 없음** — 가이드 §3의 `theme` 필터는 백엔드에 존재하지 않는다(테마 기반 큐레이션 불가). 필요하면 백엔드 추가 요청 대상.
   - ⚠️ **`avgPrice` 항상 null** — 근거 테이블 소실(백엔드 TODO `BOQ14`). FE는 가격 0을 '무료'가 아닌 **'가격 미정'**으로 표기한다. 예산 계산에서 POI 비용은 사용자가 직접 입력(override)해야 의미가 있다.
