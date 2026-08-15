@@ -57,7 +57,7 @@ export default function PoiDrawer() {
         : `${won(poi.price)} / 1인 · ${poi.priceNote}`;
 
   const info: [LucideIcon, string, string][] = [
-    [Clock, '운영시간', poi.hours],
+    [Clock, '운영시간', poi.hours || '정보 준비 중'],
     [Wallet, poi.cat === 'stay' ? '객실 요금' : '예상 객단가', priceText],
     [
       Users,

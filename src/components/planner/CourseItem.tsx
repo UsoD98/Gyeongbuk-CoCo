@@ -51,6 +51,8 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
         <div className="relative items-center justify-center my-auto">
           <ImgPlaceholder
             label={poi.img}
+            src={poi.imageUrl}
+            alt={poi.name}
             className="h-[64px] w-[64px] rounded-xl"
           />
           <span className="absolute -top-1.5 -left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-extrabold text-white shadow">
@@ -72,9 +74,10 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
           </div>
           <div className="flex items-center gap-1.5">
             <CatBadge cat={poi.cat} />
-            <span className="flex items-center gap-1 text-xs text-base-content/50">
-              <Clock size={11} />
-              {poi.hours}
+            {/* 일정에 편성된 장소는 방문 시각을, 직접 담은 장소는 운영시간을 보여준다 */}
+            <span className="flex items-center gap-1 truncate text-xs text-base-content/50">
+              <Clock size={11} className="shrink-0" />
+              {poi.visitTime || poi.hours || '시간 미정'}
             </span>
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-1.5">

@@ -16,10 +16,13 @@ export interface Poi {
   cat: PoiCat;
   themes: string[];
   buckets: PaxBucket[];
-  /** food/sight/culture = 1인 기준, stay = 1박 객실 기준 */
+  /** food/sight/culture = 1인 기준, stay = 1박 객실 기준. 0 = 가격 정보 없음 */
   price: number;
   priceNote: string;
+  /** 운영시간 원문. 빈 문자열 = 정보 없음 */
   hours: string;
+  /** 코스 일정상의 방문 시각('HH:mm'). 코스에 편성된 장소만 갖는다(운영시간과 별개). */
+  visitTime?: string;
   rating: number;
   reviews: number;
   /** 지도 플레이스홀더 위 좌표(%) */

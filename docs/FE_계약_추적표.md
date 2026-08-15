@@ -56,6 +56,12 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - ✅ `CreateCourseResponse`=`TourCourseGenerateResponseDto`, `CourseSummary`=`TourCourseListItemDto`, `CourseDetail`=`TourCourseShareResponseDto` 필드 **1:1 일치**. 봉투 `{code,msg,data}` 일치(`ApiResponse.java`).
 - ✅ GBC012 상세·GBC014 공개뷰가 **둘 다 `TourCourseShareResponseDto`** 반환 → FE 단일 `CourseDetail`로 `getCourse`/`getPublicCourse` 공용 가능(`TourCourseController.java:50,66`).
 - ✅ `place.type` 값 = `PlaceType` 이름: `ATTRACTION`/`CULTURE`/`EVENT`/`LEPORTS`/`ACCOMMODATION`/`SHOPPING`/`FOOD`(`PlaceType.java`).
+- ✅ **코스 장소(`places[]`)에 실데이터 필드가 이미 있다(2026-08-15 실측)** — FE가 `seq/time/type/contentId/placeName`만 쓰고 나머지를 버리고 있었다(예산 ₩0·썸네일 없음의 원인). 생성·상세 응답 모두 아래를 채워 보낸다:
+  - `thumbnailImg`: TourAPI firstimage URL(없으면 null, **`http://`로 옴** → FE가 https 승격)
+  - `operatingHours`: 운영시간 원문(예 `09:00~18:00`, `- 10:00~21:00- 브레이크타임 …`, 없으면 null)
+  - `cost`: **1인 예상 비용(원)**. 실데이터 없으면 타입별 기본값(`ATTRACTION` 5000·`FOOD` 12000·`CULTURE` 3000·`LEPORTS` 20000·`SHOPPING`/`EVENT` 0), **`ACCOMMODATION`은 매핑에 없어 null** → FE는 '가격 미정'
+  - `durationMinutes`: 체류 시간(분) — 현재 항상 null(실측)
+  - 장소명: 상세/공개뷰는 `placeName`(**빈 문자열일 수 있음**), 생성 응답은 없음 → **`contentName` 추가 예정(백엔드 합의)**. FE는 `placeName || contentName || '장소 #id'` 순으로 폴백하도록 선반영 완료.
 - ✅ 상세/뷰의 `placeName`은 항상 문자열(빈값 `""` 가능), 목록/생성 응답엔 없음(`TourCourseServiceImpl.buildCourseResponse:167`).
 - ✅ 게스트 생성(email null→userId null) → `assign`은 소유자 없을 때만 1회 허용(`TourCourseServiceImpl.assignCourse:203`). Step 1→2 흐름 그대로 작동.
 - ✅ POI 좋아요 응답 `{liked, likes}` → FE `TogglePoiLikeResponse`에 `likes` 반영(`PoiLikeResponseDto.java`).

@@ -20,15 +20,29 @@ import type { ApiResponse } from '@/api/types.ts';
  */
 export type Transport = 'CAR' | 'PUBLIC_TRANSPORT' | 'WALK';
 
-/** 코스 일정의 개별 장소 (schedule[].places[]) */
+/**
+ * 코스 일정의 개별 장소 (schedule[].places[]).
+ * 백엔드 `TourCourseGenerateResponseDto.PlaceInfo`(생성)·`TourCourseShareResponseDto.PlaceInfo`
+ * (상세/공개뷰) 실측. 장소명 필드만 두 응답이 다르고 나머지는 동일하다.
+ */
 export interface CoursePlace {
   seq: number;
-  time: string; // 'HH:mm:ss'
+  time: string; // 'HH:mm:ss' — 일정상 방문 시각
   // 백엔드 PlaceType 이름(실측): ATTRACTION|CULTURE|EVENT|LEPORTS|ACCOMMODATION|SHOPPING|FOOD
   type: string;
   contentId: number;
-  /** 상세(GBC012)·공개뷰(GBC014) 응답에만 포함. 목록·생성 응답엔 없음. */
+  /** 상세(GBC012)·공개뷰(GBC014)의 장소명. **빈 문자열일 수 있다**(실측). */
   placeName?: string;
+  /** 생성(GBC010)의 장소명. 백엔드 추가 예정 — 도착 전까지는 undefined 라 placeholder 로 폴백한다. */
+  contentName?: string;
+  /** 체류 예정 시간(분). 현재 백엔드가 null 로 내려준다(실측). */
+  durationMinutes?: number | null;
+  /** 대표 이미지 URL(TourAPI firstimage). 없으면 null. `http://` 로 올 수 있다. */
+  thumbnailImg?: string | null;
+  /** 운영시간 원문(예: '상시 개방', '- 10:00~21:00- 브레이크타임 15:00~15:40'). 없으면 null. */
+  operatingHours?: string | null;
+  /** 1인 예상 비용(원). 백엔드가 실데이터 없으면 타입별 기본값을 넣고, 숙박은 null. */
+  cost?: number | null;
 }
 
 /**

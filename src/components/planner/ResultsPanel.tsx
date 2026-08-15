@@ -17,6 +17,7 @@ import { resultDragId } from '@/components/planner/dnd.ts';
 import EmptyState from '@/components/planner/parts/EmptyState.tsx';
 import { getApiErrorMessage } from '@/api/types.ts';
 import { usePoiList } from '@/hooks/usePoiList.ts';
+import { usePoiResolver } from '@/hooks/usePoiResolver.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { cn } from '@/utils/cn.ts';
@@ -73,6 +74,7 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const addPoi = usePlannerStore((s) => s.addPoi);
   const setSearch = usePlannerStore((s) => s.setSearch);
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
+  const resolvePoi = usePoiResolver();
 
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [cat, setCat] = useState<string>('all');
@@ -101,7 +103,9 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
         .join(', ')
     : undefined;
   const shown = cat === 'all' ? pois : pois.filter((p) => p.cat === cat);
-  const visible = shown.slice(0, limit);
+  // 코스에 편성된 장소는 코스 응답이 가격·운영시간을 더 갖고 있다 → 해석기를 거쳐
+  // 카드와 상세 드로어가 같은 값을 보여주게 한다(그 외 장소는 카탈로그 그대로).
+  const visible = shown.slice(0, limit).map((p) => resolvePoi(p.id) ?? p);
   const inDay = (id: string) =>
     course.days[activeDay]?.items.includes(id) ?? false;
 

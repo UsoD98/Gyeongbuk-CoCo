@@ -6,6 +6,7 @@ import { useAsync } from '@/hooks/useAsync.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
+import { httpsUrl } from '@/utils/format.ts';
 import type { Poi } from '@/types/planner.ts';
 
 /**
@@ -65,12 +66,6 @@ function fetchPoisShared(
   });
   inflight.set(key, req);
   return req;
-}
-
-/** `http://` 썸네일을 https 로 승격(https 배포 시 mixed-content 차단 방지). 실패는 img onError 폴백. */
-function toHttps(url: string | null): string | undefined {
-  if (!url) return undefined;
-  return url.startsWith('http://') ? `https://${url.slice(7)}` : url;
 }
 
 /**
@@ -143,14 +138,15 @@ function toPoi(
     // 백엔드 avgPrice 가 항상 null 이라 0 — priceNote 로 '무료'가 아님을 알린다.
     price: item.avgPrice ?? 0,
     priceNote: item.avgPrice == null ? '가격 미정' : '1인 평균',
-    hours: '정보 준비 중',
+    // 목록 응답엔 운영시간이 없다(빈 문자열 = 정보 없음). 코스 응답·POI 상세(P3)가 채운다.
+    hours: '',
     rating: 0,
     reviews: 0,
     x: pos.x,
     y: pos.y,
     tags: [],
     img: CATEGORIES[cat].label,
-    imageUrl: toHttps(item.thumbnail),
+    imageUrl: httpsUrl(item.thumbnail),
     // 지역을 여러 곳 고르면 결과가 섞이므로 어느 시군구인지 한 줄로 보여준다.
     desc: regionName ?? '',
   };

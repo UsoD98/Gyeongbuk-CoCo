@@ -7,6 +7,7 @@ import type {
 } from '@/api/tourCourse.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
+import { httpsUrl } from '@/utils/format.ts';
 import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
 
 /**
@@ -110,15 +111,27 @@ const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
   FOOD: 'food',
 };
 
+/** 장소명이 없을 때 쓰는 표시명. 병합 시 "이름 미확보"를 정확히 판정하려고 상수화한다. */
+export const placeholderPlaceName = (contentId: number | string) =>
+  `장소 #${contentId}`;
+
 /**
- * 코스 장소(seq/time/type/contentId)를 UI Poi placeholder 로 변환.
- * 가격/좌표/평점은 생성·상세 응답에 없어 임시값 — POI 상세(GBC018) 연동 시 실데이터로 대체된다.
- * 이름은 상세(GBC012)엔 `placeName`이 있어 실명을, 생성(GBC010)엔 없어 `장소 #id`를 쓴다.
+ * 코스 장소(GBC010 생성 / GBC012·014 상세)를 UI `Poi` 로 변환.
+ *
+ * 응답이 주는 실데이터(장소명·썸네일·운영시간·1인 비용)를 그대로 싣는다.
+ * 좌표(x/y)·평점은 코스 응답에 없어 임시값 — 큐레이션 카탈로그(GBC017)나 POI 상세(P3)가 채운다.
+ *
+ * 장소명: 상세/공개뷰는 `placeName`, 생성은 `contentName`(백엔드 추가 예정).
+ * 둘 다 없으면 `장소 #id` placeholder 를 쓰고, 카탈로그가 있으면 `mergePoi` 가 실명으로 바꾼다.
  */
 function synthesizePoi(place: CoursePlace, region: string): Poi {
   const cat = PLACE_TYPE_TO_CAT[place.type] ?? 'sight';
-  const time = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
-  const name = place.placeName?.trim() || `장소 #${place.contentId}`;
+  const visitTime = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
+  const name =
+    place.placeName?.trim() ||
+    place.contentName?.trim() ||
+    placeholderPlaceName(place.contentId);
+  const cost = place.cost ?? 0;
   return {
     id: String(place.contentId),
     region,
@@ -126,27 +139,31 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
     cat,
     themes: [],
     buckets: [1, 2, '3-4'],
-    price: 0,
-    priceNote: '정보 준비 중',
-    hours: time || '시간 미정',
+    price: cost,
+    priceNote: cost > 0 ? '예상 비용' : '가격 미정',
+    hours: place.operatingHours?.trim() ?? '',
+    visitTime,
     rating: 0,
     reviews: 0,
     x: 50,
     y: 50,
     tags: [],
     img: CATEGORIES[cat].label,
-    desc: '상세 정보는 준비 중이에요. (POI 연동 예정)',
+    imageUrl: httpsUrl(place.thumbnailImg),
+    desc: '',
   };
 }
 
 /**
  * 코스 장소(생성/상세 응답)와 큐레이션 카탈로그(GBC017)를 한 Poi 로 합친다.
  *
- * 생성 응답(GBC010)엔 `placeName`이 없어 코스 장소는 `장소 #id` placeholder다.
- * 같은 contentId 가 카탈로그에 있으면 카탈로그(실 이름·좌표·썸네일·분류)를 바탕에 두고,
- * 코스 응답에만 있는 **방문 시각(hours)**만 덮어쓴다.
- * 분류(cat)는 카탈로그 쪽을 쓴다 — 둘 다 같은 TourAPI 출처지만 카탈로그는 `contentTypeId`
- * 직결이고, 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
+ * 두 출처가 채우는 칸이 다르다:
+ * - 카탈로그(GBC017): 실 좌표(x/y)·분류(contentTypeId 직결)·장소명
+ * - 코스 응답(GBC010/012): 방문 시각·운영시간·1인 비용, 그리고 백엔드가 `contentName` 을
+ *   넣어주면 장소명까지
+ *
+ * 기본은 카탈로그를 깔고 코스 쪽 값이 **있을 때만** 덮어쓴다(빈 문자열·0 = 정보 없음).
+ * 분류(cat)는 카탈로그 기준 — 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
  */
 export function mergePoi(
   fromCourse: Poi | undefined,
@@ -154,7 +171,17 @@ export function mergePoi(
 ): Poi | undefined {
   if (!fromCourse) return fromCatalog;
   if (!fromCatalog) return fromCourse;
-  return { ...fromCatalog, hours: fromCourse.hours };
+  const courseHasName =
+    fromCourse.name !== placeholderPlaceName(fromCourse.id);
+  return {
+    ...fromCatalog,
+    name: courseHasName ? fromCourse.name : fromCatalog.name,
+    price: fromCourse.price || fromCatalog.price,
+    priceNote: fromCourse.price ? fromCourse.priceNote : fromCatalog.priceNote,
+    hours: fromCourse.hours || fromCatalog.hours,
+    imageUrl: fromCourse.imageUrl ?? fromCatalog.imageUrl,
+    visitTime: fromCourse.visitTime,
+  };
 }
 
 export const usePlannerStore = create<PlannerState>((set, get) => ({
