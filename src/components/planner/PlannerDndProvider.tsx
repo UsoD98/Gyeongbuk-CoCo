@@ -19,6 +19,7 @@ import {
   parseDragId,
 } from '@/components/planner/dnd.ts';
 import type { ActiveDrag } from '@/components/planner/dnd.ts';
+import { usePoiResolver } from '@/hooks/usePoiResolver.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 
 /**
@@ -47,7 +48,7 @@ export default function PlannerDndProvider({
   const addPoi = usePlannerStore((s) => s.addPoi);
   const removePoi = usePlannerStore((s) => s.removePoi);
   const reorder = usePlannerStore((s) => s.reorder);
-  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
+  const resolvePoi = usePoiResolver();
 
   const [active, setActive] = useState<ActiveDrag>(null);
 

@@ -1,6 +1,7 @@
 import { Map as MapIcon, Minus, Navigation, Plus } from 'lucide-react';
 
 import Marker from '@/components/planner/parts/Marker.tsx';
+import { usePoiResolver } from '@/hooks/usePoiResolver.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import type { Poi } from '@/types/planner.ts';
 
@@ -13,8 +14,8 @@ export default function MapView({ pois }: { pois: Poi[] }) {
   const activeDay = usePlannerStore((s) => s.activeDay);
   const drawerPoiId = usePlannerStore((s) => s.drawer.poiId);
   const openDrawer = usePlannerStore((s) => s.openDrawer);
-  // 코스 항목은 목이 아니라 스토어 해석기로 푼다(API 코스 장소·큐레이션 카탈로그 포함).
-  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
+  // 코스 항목은 목이 아니라 해석기로 푼다(API 코스 장소·큐레이션 카탈로그 포함).
+  const resolvePoi = usePoiResolver();
 
   const day = course.days[activeDay];
   const courseItems = (day?.items ?? [])

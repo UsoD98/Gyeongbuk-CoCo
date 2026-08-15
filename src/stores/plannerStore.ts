@@ -70,7 +70,12 @@ interface PlannerState {
   overrides: Record<string, number>;
   drawer: Drawer;
 
-  /** poiId → Poi. 코스 장소(apiPois) + 카탈로그를 병합해 해석한다. 모든 소비처가 이걸로 해석한다. */
+  /**
+   * poiId → Poi. 코스 장소(apiPois) + 카탈로그를 병합해 해석한다.
+   * ⚠️ **React 컴포넌트는 이걸 직접 구독하지 말 것** — 함수 참조가 고정이라
+   *    `apiPois`/`poiCatalog` 가 갱신돼도 리렌더가 일어나지 않는다(이름이 stale 하게 남는다).
+   *    컴포넌트는 `hooks/usePoiResolver` 를 쓴다. 이 필드는 스토어 액션 등 비React 호출부용.
+   */
   resolvePoi: (id: string) => Poi | undefined;
   /** 큐레이션 목록 결과를 카탈로그에 병합(GBC017). 같은 contentId 는 최신 값으로 덮어쓴다. */
   registerPois: (pois: Poi[]) => void;
@@ -134,6 +139,24 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
   };
 }
 
+/**
+ * 코스 장소(생성/상세 응답)와 큐레이션 카탈로그(GBC017)를 한 Poi 로 합친다.
+ *
+ * 생성 응답(GBC010)엔 `placeName`이 없어 코스 장소는 `장소 #id` placeholder다.
+ * 같은 contentId 가 카탈로그에 있으면 카탈로그(실 이름·좌표·썸네일·분류)를 바탕에 두고,
+ * 코스 응답에만 있는 **방문 시각(hours)**만 덮어쓴다.
+ * 분류(cat)는 카탈로그 쪽을 쓴다 — 둘 다 같은 TourAPI 출처지만 카탈로그는 `contentTypeId`
+ * 직결이고, 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
+ */
+export function mergePoi(
+  fromCourse: Poi | undefined,
+  fromCatalog: Poi | undefined,
+): Poi | undefined {
+  if (!fromCourse) return fromCatalog;
+  if (!fromCatalog) return fromCourse;
+  return { ...fromCatalog, hours: fromCourse.hours };
+}
+
 export const usePlannerStore = create<PlannerState>((set, get) => ({
   courseId: null,
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
@@ -146,13 +169,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
 
   resolvePoi: (id) => {
     const { apiPois, poiCatalog } = get();
-    const fromCourse = apiPois[id];
-    const fromCatalog = poiCatalog[id];
-    if (!fromCourse) return fromCatalog;
-    if (!fromCatalog) return fromCourse;
-    // 둘 다 있으면 카탈로그(실 이름·좌표·썸네일)를 바탕에 두고,
-    // 코스 응답에만 있는 방문 시각(hours)·장소 유형(cat)을 덮어쓴다.
-    return { ...fromCatalog, cat: fromCourse.cat, hours: fromCourse.hours };
+    return mergePoi(apiPois[id], poiCatalog[id]);
   },
 
   registerPois: (pois) =>
