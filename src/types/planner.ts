@@ -25,9 +25,13 @@ export interface Poi {
   visitTime?: string;
   rating: number;
   reviews: number;
-  /** 지도 플레이스홀더 위 좌표(%) */
+  /** 지도 플레이스홀더 위 좌표(%). 카카오맵을 못 띄울 때 쓰는 폴백 지도 전용. */
   x: number;
   y: number;
+  /** 실 위도(TourAPI `mapy`). 카카오맵 마커용. 좌표 미확보 시 undefined. */
+  lat?: number;
+  /** 실 경도(TourAPI `mapx`). 카카오맵 마커용. 좌표 미확보 시 undefined. */
+  lng?: number;
   tags: string[];
   /** 이미지가 없을 때 쓰는 텍스트 라벨(플레이스홀더) */
   img: string;

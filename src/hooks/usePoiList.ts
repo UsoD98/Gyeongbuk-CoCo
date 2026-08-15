@@ -128,6 +128,8 @@ function toPoi(
   pos: { x: number; y: number },
 ): Poi {
   const cat = catOfContentType(item.contentTypeId);
+  // 카카오맵은 실경위도를 그대로 쓴다(폴백 지도용 %좌표 pos 와 별개).
+  const hasCoord = validCoord(item.mapx, item.mapy);
   return {
     id: String(item.contentId),
     region: sigunguCode,
@@ -144,6 +146,8 @@ function toPoi(
     reviews: 0,
     x: pos.x,
     y: pos.y,
+    lat: hasCoord ? (item.mapy as number) : undefined,
+    lng: hasCoord ? (item.mapx as number) : undefined,
     tags: [],
     img: CATEGORIES[cat].label,
     imageUrl: httpsUrl(item.thumbnail),

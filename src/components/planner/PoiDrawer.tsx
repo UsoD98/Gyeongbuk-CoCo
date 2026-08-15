@@ -17,7 +17,7 @@ import LikeButton from '@/components/planner/LikeButton.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
 import { usePoi } from '@/hooks/usePoi.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
-import { toast } from '@/stores/toastStore.ts';
+import { kakaoMapPlaceUrl } from '@/utils/kakaoMap.ts';
 import { won } from '@/utils/format.ts';
 import { cn } from '@/utils/cn.ts';
 
@@ -142,9 +142,11 @@ export default function PoiDrawer() {
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={() => toast.info('카카오맵으로 연결 (데모)')}
+          {/* 좌표가 있으면 해당 지점, 없으면 이름 검색으로 카카오맵을 새 탭에 연다. */}
+          <a
+            href={kakaoMapPlaceUrl(poi)}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center justify-between gap-2 rounded-2xl border border-base-200 px-3.5 py-3"
           >
             <span className="flex items-center gap-2 text-sm font-semibold">
@@ -152,7 +154,7 @@ export default function PoiDrawer() {
               카카오맵에서 보기
             </span>
             <ArrowRight size={16} className="text-base-content/50" />
-          </button>
+          </a>
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5 border-t border-base-200 p-4">
