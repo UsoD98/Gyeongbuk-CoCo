@@ -102,6 +102,17 @@ export interface UpdateCourseTitleRequest {
   title: string;
 }
 
+/**
+ * 코스 수정 요청 (GBC020 PATCH /tour-course/{courseId}).
+ *
+ * 백엔드 상세 명세 실측: 바디는 **수정한 코스 객체(schedule) 전체 교체**다(diff 아님).
+ * 장소 필드는 조회 응답(`CoursePlace`)과 같은 모양이되 장소명은 `contentName` 을 쓴다
+ * (`placeName` 은 보내지 않는다). 페이로드 조립은 `utils/coursePayload` 가 담당한다.
+ */
+export interface UpdateCourseRequest {
+  schedule: CourseScheduleDay[];
+}
+
 // ── API 함수 ───────────────────────────────────────────────
 
 /**
@@ -195,4 +206,20 @@ export async function updateCourseTitle(
     `/tour-course/${courseId}/title`,
     body,
   );
+}
+
+/**
+ * PATCH /tour-course/{courseId} — 코스 수정 (GBC020). 소유자 인증 필수(Bearer).
+ * 편집한 **일정 전체**(`schedule`)를 통째로 보내 서버 코스를 교체한다.
+ *
+ * 응답 `data` 는 명세상 "완료 데이터"로만 적혀 있어 형태가 확정되지 않았다 → 값을 쓰지 않고
+ * 성공 여부만 본다(스토어는 이미 편집 결과를 들고 있으므로 재조회 없이 그대로 확정한다).
+ * ⚠️ 소유자가 아니면 백엔드가 401/403 을 반환한다(401 은 client 인터셉터가 처리).
+ */
+export async function updateCourse(
+  courseId: number,
+  schedule: CourseScheduleDay[],
+): Promise<void> {
+  const body: UpdateCourseRequest = { schedule };
+  await apiClient.patch<ApiResponse<unknown>>(`/tour-course/${courseId}`, body);
 }

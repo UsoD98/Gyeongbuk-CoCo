@@ -107,7 +107,7 @@ interface AuthState {
 ### P1 — 코스 관리 액션
 5. **GBC013** 코스 삭제
 6. **GBC015** 코스 제목 수정
-7. **GBC020** 코스 수정 영속화 (백엔드 '개발중' — 백엔드 완료 대기)
+7. **GBC020** 코스 수정 영속화 (요청 스키마 확정 → FE 선반영 완료. 백엔드 컨트롤러 배포 후 E2E)
 8. **GBC014** 공유 링크 + 공개뷰 라우트
 
 ### P2 — POI & 마이페이지 (스펙상 보류/독립 기능)
@@ -200,11 +200,13 @@ export async function createCourse(
 - **UI**: 제목을 인라인 편집(클릭→input→onBlur 저장). 현재 `Planner.tsx:49`/`CoursePanel.tsx:98`는 읽기전용 표시.
 - **주의**: `plannerStore`에 `setTitle` 액션 추가(낙관적 업데이트 후 실패 시 롤백).
 
-### GBC020 · 코스 수정 영속화 🟠→🟢
+### GBC020 · 코스 수정 영속화 🟠→🟢 ✅ FE 완료(2026-08-15)
 
-- **만들 것**: `updateCourse(courseId, payload)` = `PATCH /tour-course/{courseId}`
-- **상태**: 편집 UI(dnd 재정렬/추가/삭제/비용)는 완성됨. **저장 트리거만** 붙이면 됨.
-- **주의**: 스펙 `x-status: 개발중` — **백엔드 완료 후** 착수. 요청 바디 스키마가 스펙에 미정의라 백엔드와 payload 형태(전체 schedule 교체? diff?) 협의 필요. 인메모리 변경을 debounce 저장 또는 명시적 "저장" 버튼으로 flush.
+- **만든 것**: `updateCourse(courseId, schedule)` = `PATCH /tour-course/{courseId}` + `utils/coursePayload.buildSchedulePayload`(페이로드 조립) + `hooks/useCourseUpdate`(저장 트리거) + `plannerStore.baseSchedule`/`dirty`/`markPristine`.
+- **payload**: 바디 `{schedule}` **전체 교체**(백엔드 상세 명세 확정 — 추적표 `GBC020` 항목 참조). 장소명 키는 `contentName`.
+- **트리거**: debounce 자동 저장이 아니라 **명시적 "변경 저장" 버튼**(요약 헤더·예산 대시보드 공용). 소유 코스이면서 `dirty` 일 때만 활성.
+- **검증**: ✅ 라이브 E2E 완료(코스 39: 제거·재정렬·비용 편집 → 변경 저장 200 → 재진입 유지).
+- **주의**: 백엔드는 `seq/time/type/contentId/durationMinutes` 만 저장하고 `cost`·`contentName`·`thumbnailImg`·`operatingHours` 는 **무시**한다 → **비용 편집은 영속되지 않는다**(추적표 참조). Day 가 비면 400 이라 전송 전에 막는다. 실 `contentId` 가 없는 장소(목 슬러그 id)는 전송에서 제외되고 toast 로 알린다.
 
 ### GBC014 · 공유 + 공개뷰 🔴→🟢
 

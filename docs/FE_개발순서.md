@@ -41,7 +41,7 @@
  Step 5 GBC013 삭제
  Step 6 GBC015 제목수정
  Step 7 GBC014 공유+공개뷰
- Step 8 GBC020 코스수정 영속화 ⏸
+ Step 8 GBC020 코스수정 영속화 ☑
 
 부록 A · 정리(선택): /home 제거 · About 콘텐츠 · 문서 드리프트 최신화
 ```
@@ -146,13 +146,13 @@
 - **검증**: 공유 → 시크릿 창(비로그인)에서 링크 열기 → 코스 표시.
 - **가이드**: §3 GBC014
 
-### Step 8 · GBC020 코스 수정 영속화 ⏸ 백엔드 대기
-- **의존**: Step 4, **백엔드 완료**(스펙 `개발중`)
-- **파일**: `api/tourCourse.ts`(`updateCourse`), `plannerStore.ts`(저장 트리거)
-- **내용**: 편집 UI(dnd/추가/삭제/비용)는 이미 완성 → **저장 트리거만** 연결. `PATCH /tour-course/{courseId}`. payload 형태(전체 schedule 교체 vs diff)는 백엔드와 협의.
+### Step 8 · GBC020 코스 수정 영속화 ☑ FE 완료(백엔드 배포 후 E2E)
+- **의존**: Step 4 · **선행 해소**: 백엔드 payload 스키마 확정(2026-08-15 상세 명세 수령)
+- **파일**: `api/tourCourse.ts`(`updateCourse`), `utils/coursePayload.ts`(신설·페이로드 조립), `hooks/useCourseUpdate.ts`(신설), `plannerStore.ts`(`baseSchedule`·`dirty`·`markPristine`), `Planner.tsx`·`BudgetDashboard.tsx`(저장 버튼)
+- **내용**: 편집 UI(dnd/추가/삭제/비용)는 이미 완성 → **저장 트리거 연결**. `PATCH /tour-course/{courseId}` 에 **`schedule` 전체 교체**. 원본 응답(`baseSchedule`)에서 날짜·시각·타입·체류시간을 복원하고, 새로 담은 장소는 카탈로그 Poi 로 채운다.
 - **DoD**: 코스 편집 후 저장하면 서버에 반영되고 재진입 시 유지됨.
-- **검증**: 편집 → 저장 → 상세 재진입 → 변경 유지.
-- **가이드**: §3 GBC020 · **선행**: 백엔드 payload 스키마 확정.
+- **검증**: ✅ 라이브 E2E 완료(코스 39: 장소 제거·dnd 재정렬·비용 편집 → 변경 저장 200 → 재진입 유지). ⚠️ 단 **비용은 백엔드가 저장하지 않는다**(표시 전용 필드 무시).
+- **가이드**: §3 GBC020 · **계약**: 추적표 `GBC020` 항목.
 
 ---
 

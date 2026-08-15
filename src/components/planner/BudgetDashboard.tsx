@@ -35,9 +35,11 @@ interface Props {
   compact?: boolean;
   onSave?: () => void;
   onShare?: () => void;
-  /** 코스 저장(GBC016) 진행/완료 상태 — 저장 버튼 비활성화·라벨 반영용 */
+  /** 코스 저장(GBC016 소유권 이전 / GBC020 편집 저장) 진행·완료 상태 — 버튼 비활성화용 */
   saving?: boolean;
   saved?: boolean;
+  /** 저장 버튼 라벨. 호출부가 코스 상태에 맞춰 '저장'/'변경 저장'/'저장됨'을 넘긴다. */
+  saveLabel?: string;
 }
 
 /** 예산 대시보드 (bars 변형). 입력은 store 의 course+pax+overrides 에서 파생 계산. */
@@ -47,6 +49,7 @@ export default function BudgetDashboard({
   onShare,
   saving = false,
   saved = false,
+  saveLabel,
 }: Props) {
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
@@ -109,7 +112,7 @@ export default function BudgetDashboard({
                 ) : (
                   <Bookmark size={16} />
                 )}
-                {saved ? '저장됨' : '저장'}
+                {saveLabel ?? (saved ? '저장됨' : '저장')}
               </button>
             )}
             {onShare && (
