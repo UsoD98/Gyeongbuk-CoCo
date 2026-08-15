@@ -38,6 +38,15 @@ function clearPending() {
   sessionStorage.removeItem(PENDING_SAVE_KEY);
 }
 
+export interface UseCourseSaveOptions {
+  /**
+   * assign 성공 직후 1회 호출된다(직접 저장·로그인 왕복 후 재개 모두).
+   * 게스트가 편집까지 해 둔 코스를 저장한 경우, 소유권이 생긴 이 시점에 편집분도
+   * 이어서 flush 하려고 쓴다(GBC020). **참조가 안정적이어야 한다**(useCallback 등).
+   */
+  onAssigned?: () => void;
+}
+
 export interface CourseSave {
   /** assign 요청 진행 중 */
   saving: boolean;
@@ -50,26 +59,32 @@ export interface CourseSave {
   save: (needLogin: () => void) => void;
 }
 
-export function useCourseSave(): CourseSave {
+export function useCourseSave({
+  onAssigned,
+}: UseCourseSaveOptions = {}): CourseSave {
   const courseId = usePlannerStore((s) => s.courseId);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const runAssign = useCallback(async (id: number) => {
-    // 시작 시 즉시 대기값을 소비한다 → StrictMode 이중 실행·중복 발사 방지.
-    clearPending();
-    setSaving(true);
-    try {
-      await assignCourse(id);
-      setSaved(true);
-      toast.success('컬렉션에 저장했어요');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, '코스 저장에 실패했어요'));
-    } finally {
-      setSaving(false);
-    }
-  }, []);
+  const runAssign = useCallback(
+    async (id: number) => {
+      // 시작 시 즉시 대기값을 소비한다 → StrictMode 이중 실행·중복 발사 방지.
+      clearPending();
+      setSaving(true);
+      try {
+        await assignCourse(id);
+        setSaved(true);
+        toast.success('컬렉션에 저장했어요');
+        onAssigned?.();
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, '코스 저장에 실패했어요'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [onAssigned],
+  );
 
   // 로그인 왕복 후 복귀 시 대기 중 저장을 자동 실행.
   // 대기값이 현재 스토어 courseId 와 다르면(오래된 값) 폐기한다.

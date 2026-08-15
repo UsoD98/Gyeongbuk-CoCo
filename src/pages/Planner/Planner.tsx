@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Bookmark, Calendar, Compass, MapPin, Share2, Users } from 'lucide-react';
 
@@ -15,6 +15,7 @@ import ResultsPanel from '@/components/planner/ResultsPanel.tsx';
 import { useCourseDetail } from '@/hooks/useCourseDetail.ts';
 import { useCourseSave } from '@/hooks/useCourseSave.ts';
 import { useCourseShare } from '@/hooks/useCourseShare.ts';
+import { useCourseUpdate } from '@/hooks/useCourseUpdate.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 import { useLoginGateStore } from '@/stores/loginGateStore.ts';
@@ -45,7 +46,14 @@ export default function Planner() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
 
-  const { saving, saved, save } = useCourseSave();
+  // 코스 편집 영속화(GBC020) — dnd·비용 편집 결과를 명시적 저장 시점에 한 번 flush.
+  const { saving: updating, dirty, save: saveEdits } = useCourseUpdate();
+  // 게스트가 편집까지 해 둔 코스라면 소유권 이전(assign) 직후 편집분도 이어서 저장한다.
+  // (`saveEdits` 는 참조 고정 + 변경 없으면 no-op 이라 매번 걸어도 안전하다.)
+  const onAssigned = useCallback(() => {
+    void saveEdits();
+  }, [saveEdits]);
+  const { saving, saved, save } = useCourseSave({ onAssigned });
   const { sharing, share } = useCourseShare();
 
   const [tab, setTab] = useState<MobileTab>('results');
@@ -100,8 +108,20 @@ export default function Planner() {
     );
   }
 
-  // 저장 = 코스 소유권 이전(GBC016). 비로그인이면 로그인 게이트를 열고, 복귀 후 자동 저장된다.
-  const onSave = () => save(() => openGate('저장'));
+  // 소유 코스 판정 = 로그인 + courseId 존재 + (이 세션에서 저장했거나 `/planner/:courseId` 진입).
+  // 제목 인라인 편집(GBC015)의 노출 조건과 같은 기준이다.
+  const owned =
+    isAuthenticated && storeCourseId != null && (saved || Boolean(courseIdParam));
+
+  // 저장 버튼 하나가 코스 상태에 따라 두 역할을 겸한다:
+  //  - 미소유(게스트·미저장): 소유권 이전(GBC016). 비로그인이면 로그인 게이트를 열고 복귀 후 자동 저장.
+  //  - 소유: 편집 내용 영속화(GBC020). 바뀐 게 없으면 '저장됨'으로 비활성.
+  const onSave = owned
+    ? () => void saveEdits()
+    : () => save(() => openGate('저장'));
+  const savePending = owned ? updating : saving;
+  const saveDone = owned ? !dirty : saved;
+  const saveLabel = saveDone ? '저장됨' : owned ? '변경 저장' : '저장';
   // 공유(GBC014) = 공개뷰 링크 생성. 로그인 불필요(수신자만 비로그인 열람) → 게이트 없이 즉시.
   const onShare = () => void share();
 
@@ -134,14 +154,14 @@ export default function Planner() {
           type="button"
           className="btn btn-sm btn-outline gap-1"
           onClick={onSave}
-          disabled={saving || saved}
+          disabled={savePending || saveDone}
         >
-          {saving ? (
+          {savePending ? (
             <span className="loading loading-spinner loading-xs" />
           ) : (
             <Bookmark size={16} />
           )}
-          {saved ? '저장됨' : '저장'}
+          {saveLabel}
         </button>
         <button
           type="button"
@@ -179,8 +199,9 @@ export default function Planner() {
           <BudgetDashboard
             onSave={onSave}
             onShare={onShare}
-            saving={saving}
-            saved={saved}
+            saving={savePending}
+            saved={saveDone}
+            saveLabel={saveLabel}
           />
         </div>
       </div>

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type {
   CourseDetail,
   CoursePlace,
+  CourseScheduleDay,
   CreateCourseResponse,
 } from '@/api/tourCourse.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
@@ -66,10 +67,24 @@ interface PlannerState {
    * 결과 목록에서 담은 장소가 코스·예산 패널에서 해석 불가가 된다.
    */
   poiCatalog: Record<string, Poi>;
+  /**
+   * 서버에서 받은 **원본 일정**(생성 GBC010 / 상세 GBC012·014 응답의 `schedule` 그대로).
+   * UI 코스(`course.days`)는 표시에 필요한 것만 남긴 축약형이라, 코스 수정(GBC020)으로
+   * 돌려보낼 때 필요한 원본 필드(날짜·시각·PlaceType·체류시간·썸네일·운영시간)를 잃는다.
+   * 그 복원 근거로 응답을 그대로 보관한다(페이로드 조립은 `utils/coursePayload`).
+   * ⚠️ 편집해도 갱신하지 않는다 — 편집 결과의 정본은 언제나 `course.days`다.
+   */
+  baseSchedule: CourseScheduleDay[];
   activeDay: number;
   /** poiId → 사용자가 수정한 금액 */
   overrides: Record<string, number>;
   drawer: Drawer;
+  /**
+   * 서버에 아직 반영하지 않은 편집(추가·제거·재정렬·비용)이 있는지 (GBC020).
+   * 코스 로드 시 false 로 시작해 편집 액션에서 true 가 되고, 수정 저장 성공 시
+   * `markPristine()` 으로 되돌린다. "변경 저장" 버튼 활성화 조건.
+   */
+  dirty: boolean;
 
   /**
    * poiId → Poi. 코스 장소(apiPois) + 카탈로그를 병합해 해석한다.
@@ -96,6 +111,8 @@ interface PlannerState {
   reorder: (dayIdx: number, from: number, to: number) => void;
   editCost: (poiId: string, val: number) => void;
   resetCost: (poiId: string) => void;
+  /** 편집 내용을 서버에 반영 완료로 표시(GBC020 성공 시 `useCourseUpdate` 가 호출). */
+  markPristine: () => void;
   openDrawer: (poiId: string) => void;
   closeDrawer: () => void;
 }
@@ -190,9 +207,11 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   course: { title: '', days: [] },
   apiPois: {},
   poiCatalog: {},
+  baseSchedule: [],
   activeDay: 0,
   overrides: {},
   drawer: { open: false, poiId: null },
+  dirty: false,
 
   resolvePoi: (id) => {
     const { apiPois, poiCatalog } = get();
@@ -225,6 +244,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     set({
       courseId: res.courseId,
       apiPois,
+      baseSchedule: res.schedule,
       course: { title: ctx.title, days },
       search: {
         dests: ctx.dests,
@@ -236,6 +256,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       activeDay: 0,
       overrides: {},
       drawer: { open: false, poiId: null },
+      dirty: false,
     });
   },
 
@@ -256,6 +277,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     set({
       courseId: detail.courseId,
       apiPois,
+      baseSchedule: detail.schedule,
       course: { title: detail.title, days },
       search: {
         // 상세 응답엔 sigunguCode/지역이 없다 → dests 비움(Planner 는 '경상북도'로 폴백).
@@ -268,6 +290,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       activeDay: 0,
       overrides: {},
       drawer: { open: false, poiId: null },
+      dirty: false,
     });
   },
 
@@ -297,51 +320,70 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
           i === s.activeDay ? { ...d, items } : d,
         ),
       },
+      dirty: true,
     });
     if (poi) toast.success(`'${poi.name}' ${day.label}에 추가`);
   },
 
   removePoi: (dayIdx, poiId) =>
-    set((s) => ({
-      course: {
-        ...s.course,
-        days: s.course.days.map((d, i) =>
-          i === dayIdx ? { ...d, items: d.items.filter((x) => x !== poiId) } : d,
-        ),
-      },
-    })),
+    set((s) => {
+      const day = s.course.days[dayIdx];
+      // 없는 장소를 지우려 한 경우(중복 발사 등)는 dirty 를 세우지 않는다.
+      if (!day?.items.includes(poiId)) return {};
+      return {
+        course: {
+          ...s.course,
+          days: s.course.days.map((d, i) =>
+            i === dayIdx
+              ? { ...d, items: d.items.filter((x) => x !== poiId) }
+              : d,
+          ),
+        },
+        dirty: true,
+      };
+    }),
 
   reorder: (dayIdx, from, to) =>
-    set((s) => ({
-      course: {
-        ...s.course,
-        days: s.course.days.map((d, i) => {
-          if (i !== dayIdx) return d;
-          if (
-            from < 0 ||
-            to < 0 ||
-            from >= d.items.length ||
-            to >= d.items.length ||
-            from === to
-          )
-            return d;
-          const items = [...d.items];
-          const [moved] = items.splice(from, 1);
-          items.splice(to, 0, moved);
-          return { ...d, items };
-        }),
-      },
-    })),
+    set((s) => {
+      const day = s.course.days[dayIdx];
+      // 제자리 드롭(from === to)·범위 밖은 no-op — dirty 도 세우지 않는다.
+      if (
+        !day ||
+        from < 0 ||
+        to < 0 ||
+        from >= day.items.length ||
+        to >= day.items.length ||
+        from === to
+      )
+        return {};
+      const items = [...day.items];
+      const [moved] = items.splice(from, 1);
+      items.splice(to, 0, moved);
+      return {
+        course: {
+          ...s.course,
+          days: s.course.days.map((d, i) => (i === dayIdx ? { ...d, items } : d)),
+        },
+        dirty: true,
+      };
+    }),
 
   editCost: (poiId, val) =>
-    set((s) => ({ overrides: { ...s.overrides, [poiId]: Math.max(0, val) } })),
+    set((s) => {
+      const next = Math.max(0, val);
+      if (s.overrides[poiId] === next) return {};
+      return { overrides: { ...s.overrides, [poiId]: next }, dirty: true };
+    }),
 
   resetCost: (poiId) =>
     set((s) => {
+      if (s.overrides[poiId] == null) return {};
       const next = { ...s.overrides };
       delete next[poiId];
-      return { overrides: next };
+      return { overrides: next, dirty: true };
     }),
+
+  markPristine: () => set({ dirty: false }),
 
   openDrawer: (poiId) => set({ drawer: { open: true, poiId } }),
   closeDrawer: () => set((s) => ({ drawer: { ...s.drawer, open: false } })),
