@@ -48,20 +48,17 @@ export default function PoiDrawer() {
 
   const day = course.days[activeDay];
   const inDay = day?.items.includes(poi.id) ?? false;
+  // 가격 0 은 '무료'일 수도, 데이터 미제공(GBC017 avgPrice=null)일 수도 있다 → priceNote 가 구분한다.
   const priceText =
     poi.price === 0
-      ? '무료'
+      ? poi.priceNote
       : poi.cat === 'stay'
-        ? `${won(poi.price)} / 1박`
-        : `${won(poi.price)} / 1인`;
+        ? `${won(poi.price)} / 1박 · ${poi.priceNote}`
+        : `${won(poi.price)} / 1인 · ${poi.priceNote}`;
 
   const info: [LucideIcon, string, string][] = [
     [Clock, '운영시간', poi.hours],
-    [
-      Wallet,
-      poi.cat === 'stay' ? '객실 요금' : '예상 객단가',
-      `${priceText} · ${poi.priceNote}`,
-    ],
+    [Wallet, poi.cat === 'stay' ? '객실 요금' : '예상 객단가', priceText],
     [
       Users,
       '적합 인원',
@@ -91,7 +88,12 @@ export default function PoiDrawer() {
         )}
       >
         <div className="relative shrink-0">
-          <ImgPlaceholder label={poi.img} className="h-[240px] w-full" />
+          <ImgPlaceholder
+            label={poi.img}
+            src={poi.imageUrl}
+            alt={poi.name}
+            className="h-[240px] w-full"
+          />
           <button
             type="button"
             onClick={closeDrawer}

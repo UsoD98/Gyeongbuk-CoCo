@@ -5,7 +5,7 @@ import type {
   CoursePlace,
   CreateCourseResponse,
 } from '@/api/tourCourse.ts';
-import { CATEGORIES, poiById } from '@/mocks/planner.ts';
+import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
 import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
 
@@ -58,13 +58,22 @@ interface PlannerState {
    * 생성 응답엔 이름/가격/좌표가 없어 placeholder 로 채운다 — POI 상세(GBC018) 연동 시 실데이터로 대체.
    */
   apiPois: Record<string, Poi>;
+  /**
+   * 큐레이션 목록(GBC017)으로 조회한 POI 카탈로그(key = String(contentId)).
+   * `apiPois`와 분리해 둔다 — 코스 로드(`loadFromApi`/`loadDetail`)가 `apiPois`를 통째로
+   * 교체하므로, 같은 곳에 두면 브라우즈한 POI가 코스 재로드 때 날아가고
+   * 결과 목록에서 담은 장소가 코스·예산 패널에서 해석 불가가 된다.
+   */
+  poiCatalog: Record<string, Poi>;
   activeDay: number;
   /** poiId → 사용자가 수정한 금액 */
   overrides: Record<string, number>;
   drawer: Drawer;
 
-  /** poiId → Poi. API 레지스트리 우선, 없으면 목 데이터. 모든 소비처가 이걸로 해석한다. */
+  /** poiId → Poi. 코스 장소(apiPois) + 카탈로그를 병합해 해석한다. 모든 소비처가 이걸로 해석한다. */
   resolvePoi: (id: string) => Poi | undefined;
+  /** 큐레이션 목록 결과를 카탈로그에 병합(GBC017). 같은 contentId 는 최신 값으로 덮어쓴다. */
+  registerPois: (pois: Poi[]) => void;
   /** GBC010 생성 응답을 스토어에 주입(부팅 목업 대체). */
   loadFromApi: (res: CreateCourseResponse, ctx: LoadFromApiContext) => void;
   /** GBC012 코스 상세 응답을 스토어에 주입(목록 카드 클릭·URL 재진입). */
@@ -130,11 +139,30 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
   course: { title: '', days: [] },
   apiPois: {},
+  poiCatalog: {},
   activeDay: 0,
   overrides: {},
   drawer: { open: false, poiId: null },
 
-  resolvePoi: (id) => get().apiPois[id] ?? poiById(id),
+  resolvePoi: (id) => {
+    const { apiPois, poiCatalog } = get();
+    const fromCourse = apiPois[id];
+    const fromCatalog = poiCatalog[id];
+    if (!fromCourse) return fromCatalog;
+    if (!fromCatalog) return fromCourse;
+    // 둘 다 있으면 카탈로그(실 이름·좌표·썸네일)를 바탕에 두고,
+    // 코스 응답에만 있는 방문 시각(hours)·장소 유형(cat)을 덮어쓴다.
+    return { ...fromCatalog, cat: fromCourse.cat, hours: fromCourse.hours };
+  },
+
+  registerPois: (pois) =>
+    set((s) => {
+      const next = { ...s.poiCatalog };
+      pois.forEach((p) => {
+        next[p.id] = p;
+      });
+      return { poiCatalog: next };
+    }),
 
   loadFromApi: (res, ctx) => {
     const apiPois: Record<string, Poi> = {};

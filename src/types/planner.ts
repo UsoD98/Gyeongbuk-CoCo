@@ -26,8 +26,10 @@ export interface Poi {
   x: number;
   y: number;
   tags: string[];
-  /** 실제 이미지 도입 전까지 쓰는 텍스트 라벨 */
+  /** 이미지가 없을 때 쓰는 텍스트 라벨(플레이스홀더) */
   img: string;
+  /** 실제 대표 이미지 URL(GBC017 `thumbnail`). 없으면 `img` 라벨로 폴백. */
+  imageUrl?: string;
   desc: string;
 }
 

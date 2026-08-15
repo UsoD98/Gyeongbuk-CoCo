@@ -2,7 +2,6 @@
  * 예산 계산 엔진. `docs/sample.html`의 coco/budget.jsx 를 순수 함수로 이식.
  * course + pax + overrides 에서 예산을 파생 계산한다(상태로 저장하지 않음).
  */
-import { poiById } from '@/mocks/planner.ts';
 import type {
   Budget,
   BudgetCatKey,
@@ -40,15 +39,15 @@ export function defaultCost(poi: Poi, n: number): number {
  * course(days[].items[poiId]) + pax + overrides + days → 예산.
  * 교통비는 좌표 기반 추정 자리(프로토타입과 동일): 8500 × max(1,days) × ceil(n/4).
  *
- * `resolve`: poiId → Poi 해석기. 기본은 목 데이터(poiById)지만, API 생성 코스의
- * 합성 POI까지 포함하려면 호출부가 plannerStore.resolvePoi 를 넘긴다.
+ * `resolve`: poiId → Poi 해석기. 호출부(`BudgetDashboard`)가 `plannerStore.resolvePoi` 를 넘긴다
+ * (코스 장소 + 큐레이션 카탈로그). 넘기지 않으면 해석 불가 → 빈 예산.
  */
 export function computeBudget(
   course: Course | undefined,
   n: number,
   overrides: Record<string, number> = {},
   days = 3,
-  resolve: (id: string) => Poi | undefined = poiById,
+  resolve: (id: string) => Poi | undefined = () => undefined,
 ): Budget {
   const items: BudgetItem[] = [];
   const byCat: Record<BudgetCatKey, number> = {
