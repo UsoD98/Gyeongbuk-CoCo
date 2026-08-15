@@ -16,18 +16,27 @@ export interface Poi {
   cat: PoiCat;
   themes: string[];
   buckets: PaxBucket[];
-  /** food/sight/culture = 1인 기준, stay = 1박 객실 기준 */
+  /** food/sight/culture = 1인 기준, stay = 1박 객실 기준. 0 = 가격 정보 없음 */
   price: number;
   priceNote: string;
+  /** 운영시간 원문. 빈 문자열 = 정보 없음 */
   hours: string;
+  /** 코스 일정상의 방문 시각('HH:mm'). 코스에 편성된 장소만 갖는다(운영시간과 별개). */
+  visitTime?: string;
   rating: number;
   reviews: number;
-  /** 지도 플레이스홀더 위 좌표(%) */
+  /** 지도 플레이스홀더 위 좌표(%). 카카오맵을 못 띄울 때 쓰는 폴백 지도 전용. */
   x: number;
   y: number;
+  /** 실 위도(TourAPI `mapy`). 카카오맵 마커용. 좌표 미확보 시 undefined. */
+  lat?: number;
+  /** 실 경도(TourAPI `mapx`). 카카오맵 마커용. 좌표 미확보 시 undefined. */
+  lng?: number;
   tags: string[];
-  /** 실제 이미지 도입 전까지 쓰는 텍스트 라벨 */
+  /** 이미지가 없을 때 쓰는 텍스트 라벨(플레이스홀더) */
   img: string;
+  /** 실제 대표 이미지 URL(GBC017 `thumbnail`). 없으면 `img` 라벨로 폴백. */
+  imageUrl?: string;
   desc: string;
 }
 

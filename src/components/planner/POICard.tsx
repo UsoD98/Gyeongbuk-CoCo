@@ -18,7 +18,8 @@ interface Props {
 }
 
 function priceText(poi: Poi): string {
-  if (poi.price === 0) return '무료';
+  // 가격 0 은 '무료'일 수도, 데이터 미제공(GBC017 avgPrice=null)일 수도 있다 → priceNote 가 구분한다.
+  if (poi.price === 0) return poi.priceNote;
   return poi.cat === 'stay' ? `${won(poi.price)} /박` : `${won(poi.price)} /인`;
 }
 
@@ -70,6 +71,8 @@ export default function POICard({
       >
         <ImgPlaceholder
           label={poi.img}
+          src={poi.imageUrl}
+          alt={poi.name}
           className="h-[92px] w-[92px] shrink-0 rounded-xl"
         />
         <div className="flex min-w-0 grow flex-col justify-center gap-1.5">
@@ -96,7 +99,12 @@ export default function POICard({
       className="card flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-base-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="relative">
-        <ImgPlaceholder label={poi.img} className="aspect-[16/10] w-full" />
+        <ImgPlaceholder
+          label={poi.img}
+          src={poi.imageUrl}
+          alt={poi.name}
+          className="aspect-[16/10] w-full"
+        />
         <div className="absolute left-2 top-2">
           <CatBadge cat={poi.cat} />
         </div>

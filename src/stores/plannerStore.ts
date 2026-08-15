@@ -5,8 +5,9 @@ import type {
   CoursePlace,
   CreateCourseResponse,
 } from '@/api/tourCourse.ts';
-import { CATEGORIES, poiById } from '@/mocks/planner.ts';
+import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
+import { httpsUrl } from '@/utils/format.ts';
 import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
 
 /**
@@ -58,13 +59,27 @@ interface PlannerState {
    * 생성 응답엔 이름/가격/좌표가 없어 placeholder 로 채운다 — POI 상세(GBC018) 연동 시 실데이터로 대체.
    */
   apiPois: Record<string, Poi>;
+  /**
+   * 큐레이션 목록(GBC017)으로 조회한 POI 카탈로그(key = String(contentId)).
+   * `apiPois`와 분리해 둔다 — 코스 로드(`loadFromApi`/`loadDetail`)가 `apiPois`를 통째로
+   * 교체하므로, 같은 곳에 두면 브라우즈한 POI가 코스 재로드 때 날아가고
+   * 결과 목록에서 담은 장소가 코스·예산 패널에서 해석 불가가 된다.
+   */
+  poiCatalog: Record<string, Poi>;
   activeDay: number;
   /** poiId → 사용자가 수정한 금액 */
   overrides: Record<string, number>;
   drawer: Drawer;
 
-  /** poiId → Poi. API 레지스트리 우선, 없으면 목 데이터. 모든 소비처가 이걸로 해석한다. */
+  /**
+   * poiId → Poi. 코스 장소(apiPois) + 카탈로그를 병합해 해석한다.
+   * ⚠️ **React 컴포넌트는 이걸 직접 구독하지 말 것** — 함수 참조가 고정이라
+   *    `apiPois`/`poiCatalog` 가 갱신돼도 리렌더가 일어나지 않는다(이름이 stale 하게 남는다).
+   *    컴포넌트는 `hooks/usePoiResolver` 를 쓴다. 이 필드는 스토어 액션 등 비React 호출부용.
+   */
   resolvePoi: (id: string) => Poi | undefined;
+  /** 큐레이션 목록 결과를 카탈로그에 병합(GBC017). 같은 contentId 는 최신 값으로 덮어쓴다. */
+  registerPois: (pois: Poi[]) => void;
   /** GBC010 생성 응답을 스토어에 주입(부팅 목업 대체). */
   loadFromApi: (res: CreateCourseResponse, ctx: LoadFromApiContext) => void;
   /** GBC012 코스 상세 응답을 스토어에 주입(목록 카드 클릭·URL 재진입). */
@@ -96,15 +111,27 @@ const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
   FOOD: 'food',
 };
 
+/** 장소명이 없을 때 쓰는 표시명. 병합 시 "이름 미확보"를 정확히 판정하려고 상수화한다. */
+export const placeholderPlaceName = (contentId: number | string) =>
+  `장소 #${contentId}`;
+
 /**
- * 코스 장소(seq/time/type/contentId)를 UI Poi placeholder 로 변환.
- * 가격/좌표/평점은 생성·상세 응답에 없어 임시값 — POI 상세(GBC018) 연동 시 실데이터로 대체된다.
- * 이름은 상세(GBC012)엔 `placeName`이 있어 실명을, 생성(GBC010)엔 없어 `장소 #id`를 쓴다.
+ * 코스 장소(GBC010 생성 / GBC012·014 상세)를 UI `Poi` 로 변환.
+ *
+ * 응답이 주는 실데이터(장소명·썸네일·운영시간·1인 비용)를 그대로 싣는다.
+ * 좌표(x/y)·평점은 코스 응답에 없어 임시값 — 큐레이션 카탈로그(GBC017)나 POI 상세(P3)가 채운다.
+ *
+ * 장소명: 상세/공개뷰는 `placeName`, 생성은 `contentName`(백엔드 추가 예정).
+ * 둘 다 없으면 `장소 #id` placeholder 를 쓰고, 카탈로그가 있으면 `mergePoi` 가 실명으로 바꾼다.
  */
 function synthesizePoi(place: CoursePlace, region: string): Poi {
   const cat = PLACE_TYPE_TO_CAT[place.type] ?? 'sight';
-  const time = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
-  const name = place.placeName?.trim() || `장소 #${place.contentId}`;
+  const visitTime = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
+  const name =
+    place.placeName?.trim() ||
+    place.contentName?.trim() ||
+    placeholderPlaceName(place.contentId);
+  const cost = place.cost ?? 0;
   return {
     id: String(place.contentId),
     region,
@@ -112,16 +139,48 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
     cat,
     themes: [],
     buckets: [1, 2, '3-4'],
-    price: 0,
-    priceNote: '정보 준비 중',
-    hours: time || '시간 미정',
+    price: cost,
+    priceNote: cost > 0 ? '예상 비용' : '가격 미정',
+    hours: place.operatingHours?.trim() ?? '',
+    visitTime,
     rating: 0,
     reviews: 0,
     x: 50,
     y: 50,
     tags: [],
     img: CATEGORIES[cat].label,
-    desc: '상세 정보는 준비 중이에요. (POI 연동 예정)',
+    imageUrl: httpsUrl(place.thumbnailImg),
+    desc: '',
+  };
+}
+
+/**
+ * 코스 장소(생성/상세 응답)와 큐레이션 카탈로그(GBC017)를 한 Poi 로 합친다.
+ *
+ * 두 출처가 채우는 칸이 다르다:
+ * - 카탈로그(GBC017): 실 좌표(x/y)·분류(contentTypeId 직결)·장소명
+ * - 코스 응답(GBC010/012): 방문 시각·운영시간·1인 비용, 그리고 백엔드가 `contentName` 을
+ *   넣어주면 장소명까지
+ *
+ * 기본은 카탈로그를 깔고 코스 쪽 값이 **있을 때만** 덮어쓴다(빈 문자열·0 = 정보 없음).
+ * 분류(cat)는 카탈로그 기준 — 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
+ */
+export function mergePoi(
+  fromCourse: Poi | undefined,
+  fromCatalog: Poi | undefined,
+): Poi | undefined {
+  if (!fromCourse) return fromCatalog;
+  if (!fromCatalog) return fromCourse;
+  const courseHasName =
+    fromCourse.name !== placeholderPlaceName(fromCourse.id);
+  return {
+    ...fromCatalog,
+    name: courseHasName ? fromCourse.name : fromCatalog.name,
+    price: fromCourse.price || fromCatalog.price,
+    priceNote: fromCourse.price ? fromCourse.priceNote : fromCatalog.priceNote,
+    hours: fromCourse.hours || fromCatalog.hours,
+    imageUrl: fromCourse.imageUrl ?? fromCatalog.imageUrl,
+    visitTime: fromCourse.visitTime,
   };
 }
 
@@ -130,11 +189,24 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
   course: { title: '', days: [] },
   apiPois: {},
+  poiCatalog: {},
   activeDay: 0,
   overrides: {},
   drawer: { open: false, poiId: null },
 
-  resolvePoi: (id) => get().apiPois[id] ?? poiById(id),
+  resolvePoi: (id) => {
+    const { apiPois, poiCatalog } = get();
+    return mergePoi(apiPois[id], poiCatalog[id]);
+  },
+
+  registerPois: (pois) =>
+    set((s) => {
+      const next = { ...s.poiCatalog };
+      pois.forEach((p) => {
+        next[p.id] = p;
+      });
+      return { poiCatalog: next };
+    }),
 
   loadFromApi: (res, ctx) => {
     const apiPois: Record<string, Poi> = {};

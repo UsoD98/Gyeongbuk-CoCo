@@ -1,29 +1,37 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
-import { POIS, REGIONS, paxBucket } from '@/mocks/planner.ts';
+import { catOfContentType, getPois } from '@/api/poi.ts';
+import type { PoiListResponse, PoiSummary } from '@/api/poi.ts';
+import { useAsync } from '@/hooks/useAsync.ts';
+import { CATEGORIES } from '@/mocks/planner.ts';
+import { usePlannerStore } from '@/stores/plannerStore.ts';
+import { useSigunguStore } from '@/stores/sigunguStore.ts';
+import { httpsUrl } from '@/utils/format.ts';
 import type { Poi } from '@/types/planner.ts';
 
 /**
- * 큐레이션 POI 목록(GBC017)의 데이터 소스를 캡슐화한 훅 — 목→API 교체 지점.
+ * 큐레이션 POI 목록(GBC017)의 데이터 소스를 캡슐화한 훅.
  *
- * ▷ 현재(P0): 목 데이터(`@/mocks/planner`)를 검색조건으로 동기 필터해 반환한다.
- * ▷ P2(GBC017, 백엔드 대기): 이 훅 내부만 `getPois(params)` + `useAsync`로 교체하면
- *   소비처(`ResultsPanel`)는 수정 없이 실데이터를 받는다. 반환 형태를 미리 비동기 3-상태
- *   (loading/error/reload)로 맞춰 두어 교체 시 컴포넌트가 바뀌지 않도록 한다.
+ * ▷ P0: 목 데이터를 동기 필터 → ▷ **P2(현재): `GET /poi` 실데이터**.
+ *   소비처(`ResultsPanel`)는 P0에서 맞춰 둔 `{pois, ready, loading, error, reload}` 3-상태를
+ *   그대로 소비하므로 훅 내부만 교체됐다.
  *
- * `dests` 는 시군구 코드 배열, `pax` 는 인원수, `themes` 는 테마 id 배열.
+ * ⚠️ 백엔드 `GET /poi`는 `sigunguCode`가 **단수·필수**다. 검색은 시군구 복수 선택을 허용하므로
+ *    선택 지역마다 병렬 호출(`Promise.all`)해 결과를 합친다(정책: 사용자가 고른 지역 전부 노출).
+ * ⚠️ 백엔드에 `theme` 파라미터가 없어 **테마 필터/정렬은 불가**(P0의 목 기반 테마 우선정렬 제거).
+ * ⚠️ `avgPrice`는 백엔드가 항상 null(BOQ14) → 가격은 0("무료"가 아닌 '정보 준비 중'으로 표기).
  */
 export interface UsePoiListArgs {
+  /** 시군구 코드 배열(3자리 bare, `sigunguStore.value`). 비어 있으면 조회하지 않는다. */
   dests: string[];
   pax: number;
-  themes: string[];
 }
 
 export interface PoiListState {
   pois: Poi[];
   /**
-   * 데이터 제공 지역 여부(목 전용 게이트: `REGIONS.ready`).
-   * P2에서는 '서버 결과 존재 여부'로 의미가 대체된다.
+   * 큐레이션 데이터 제공 지역 여부 = 선택 지역 중 하나라도 서버 `available:true`.
+   * 데이터 없는 시군구는 200 + `{available:false, items:[]}`로 온다.
    */
   ready: boolean;
   loading: boolean;
@@ -31,39 +39,168 @@ export interface PoiListState {
   reload: () => void;
 }
 
-/**
- * 검색조건(목적지·인원·테마)으로 목 POI 필터 + 테마 매칭 우선 정렬.
- * P2에서 서버 필터(`GET /poi`)로 대체된다.
- */
-function filterMockPois(dests: string[], pax: number, themes: string[]): Poi[] {
-  const bucket = paxBucket(pax);
-  let list = POIS.filter(
-    (p) => dests.includes(p.region) && p.buckets.includes(bucket),
-  );
-  if (themes.length) {
-    list = [...list].sort((a, b) => {
-      const am = a.themes.some((t) => themes.includes(t)) ? 0 : 1;
-      const bm = b.themes.some((t) => themes.includes(t)) ? 0 : 1;
-      return am - bm;
-    });
-  }
-  return list;
+/** 지역별 응답을 지역코드와 짝지어 평탄화한 중간 표현. */
+interface FlatItem {
+  item: PoiSummary;
+  sigunguCode: string;
 }
 
-export function usePoiList({
-  dests,
-  pax,
-  themes,
-}: UsePoiListArgs): PoiListState {
-  const pois = useMemo(
-    () => filterMockPois(dests, pax, themes),
-    [dests, pax, themes],
+/**
+ * 진행 중인 동일 요청 공유(in-flight dedup).
+ * Planner 는 데스크톱·모바일 ResultsPanel 을 **동시에 마운트**하고 dev StrictMode 는 effect 를
+ * 두 번 돌린다 → 같은 (지역, 인원) 조회가 동시에 2~4회 나간다. `GET /poi` 는 TourAPI 라이브
+ * 조회라 동시 호출이 겹치면 503 이 나기도 해서(실측), 아직 끝나지 않은 동일 요청은 공유한다.
+ * 완료 즉시 항목을 지우므로 캐시가 아니다(재조회는 항상 새 요청).
+ */
+const inflight = new Map<string, Promise<PoiListResponse>>();
+
+function fetchPoisShared(
+  sigunguCode: string,
+  peopleCount: number,
+): Promise<PoiListResponse> {
+  const key = `${sigunguCode}|${peopleCount}`;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+  const req = getPois({ sigunguCode, peopleCount }).finally(() => {
+    inflight.delete(key);
+  });
+  inflight.set(key, req);
+  return req;
+}
+
+/**
+ * 좌표 유효성 — TourAPI 데이터에 좌표가 `0`인 항목이 섞여 있다(경주 실측 1건).
+ * 이런 값을 bounding box 계산에 넣으면 span 이 폭발해 나머지 전부가 한 점에 뭉친다.
+ * 대한민국(경북 포함) 경위도 범위 밖이면 좌표 없음으로 간주한다.
+ */
+function validCoord(mapx: number | null, mapy: number | null): boolean {
+  return (
+    mapx != null &&
+    mapy != null &&
+    mapx >= 124 &&
+    mapx <= 132 &&
+    mapy >= 33 &&
+    mapy <= 39
   );
+}
+
+/**
+ * 실좌표(경도/위도)를 플레이스홀더 지도의 % 좌표로 투영한다.
+ * 결과 집합의 bounding box를 10~90% 범위에 맞춰 정규화(위도는 위쪽이 커야 하므로 반전).
+ * 좌표가 없거나 bbox가 한 점이면 중앙(50)에 둔다. 실지도(P3, 카카오맵) 도입 시 불필요해진다.
+ */
+function projectToPercent(flat: FlatItem[]): (item: PoiSummary) => {
+  x: number;
+  y: number;
+} {
+  const valid = flat
+    .map((f) => f.item)
+    .filter((i) => validCoord(i.mapx, i.mapy)) as (PoiSummary & {
+    mapx: number;
+    mapy: number;
+  })[];
+  const xs = valid.map((i) => i.mapx);
+  const ys = valid.map((i) => i.mapy);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  const scale = (v: number, min: number, span: number) =>
+    span > 0 ? 10 + ((v - min) / span) * 80 : 50;
+  return (item) => {
+    if (!valid.length || !validCoord(item.mapx, item.mapy)) {
+      return { x: 50, y: 50 };
+    }
+    return {
+      x: scale(item.mapx as number, minX, spanX),
+      // 위도는 값이 클수록 북쪽(위) → y(%) 는 위가 0이므로 반전.
+      y: 100 - scale(item.mapy as number, minY, spanY),
+    };
+  };
+}
+
+/** GBC017 항목 → UI `Poi`. 이름/좌표/썸네일은 실데이터, 상세(설명·평점·시간)는 P3에서 채운다. */
+function toPoi(
+  { item, sigunguCode }: FlatItem,
+  regionName: string | undefined,
+  pos: { x: number; y: number },
+): Poi {
+  const cat = catOfContentType(item.contentTypeId);
+  // 카카오맵은 실경위도를 그대로 쓴다(폴백 지도용 %좌표 pos 와 별개).
+  const hasCoord = validCoord(item.mapx, item.mapy);
+  return {
+    id: String(item.contentId),
+    region: sigunguCode,
+    name: item.title,
+    cat,
+    themes: [],
+    buckets: [1, 2, '3-4'],
+    // 백엔드 avgPrice 가 항상 null 이라 0 — priceNote 로 '무료'가 아님을 알린다.
+    price: item.avgPrice ?? 0,
+    priceNote: item.avgPrice == null ? '가격 미정' : '1인 평균',
+    // 목록 응답엔 운영시간이 없다(빈 문자열 = 정보 없음). 코스 응답·POI 상세(P3)가 채운다.
+    hours: '',
+    rating: 0,
+    reviews: 0,
+    x: pos.x,
+    y: pos.y,
+    lat: hasCoord ? (item.mapy as number) : undefined,
+    lng: hasCoord ? (item.mapx as number) : undefined,
+    tags: [],
+    img: CATEGORIES[cat].label,
+    imageUrl: httpsUrl(item.thumbnail),
+    // 지역을 여러 곳 고르면 결과가 섞이므로 어느 시군구인지 한 줄로 보여준다.
+    desc: regionName ?? '',
+  };
+}
+
+export function usePoiList({ dests, pax }: UsePoiListArgs): PoiListState {
+  const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
+  const registerPois = usePlannerStore((s) => s.registerPois);
+
+  // 배열은 매 렌더 새 참조라 fetcher 가 불안정해진다 → 문자열 키로 고정.
+  const destKey = dests.join(',');
+
+  const fetcher = useCallback(async (): Promise<PoiListResponse[]> => {
+    const codes = destKey ? destKey.split(',') : [];
+    if (!codes.length) return [];
+    return Promise.all(
+      codes.map((sigunguCode) => fetchPoisShared(sigunguCode, pax)),
+    );
+  }, [destKey, pax]);
+
+  const { data, loading, error, reload } = useAsync(fetcher);
+
+  const pois = useMemo(() => {
+    if (!data?.length) return [];
+    const codes = destKey ? destKey.split(',') : [];
+    const flat: FlatItem[] = [];
+    const seen = new Set<number>();
+    data.forEach((res, i) => {
+      res.items.forEach((item) => {
+        // 지역 경계에 걸친 중복 contentId 제거(React key·DnD id 충돌 방지).
+        if (seen.has(item.contentId)) return;
+        seen.add(item.contentId);
+        flat.push({ item, sigunguCode: codes[i] ?? '' });
+      });
+    });
+    const project = projectToPercent(flat);
+    return flat.map((f) =>
+      toPoi(f, getSigunguLabel(f.sigunguCode), project(f.item)),
+    );
+  }, [data, destKey, getSigunguLabel]);
+
+  // 결과 목록에서 담은 장소를 코스·예산·드로어가 해석할 수 있도록 스토어 카탈로그에 등록.
+  useEffect(() => {
+    if (pois.length) registerPois(pois);
+  }, [pois, registerPois]);
+
   const ready = useMemo(
-    () => dests.some((d) => REGIONS.find((r) => r.code === d)?.ready),
-    [dests],
+    () => (data ?? []).some((res) => res.available),
+    [data],
   );
-  // 목 데이터는 동기라 항상 로딩 완료·에러 없음. reload 는 no-op(P2에서 useAsync.reload로 교체).
-  const reload = useCallback(() => {}, []);
-  return { pois, ready, loading: false, error: null, reload };
+
+  return { pois, ready, loading, error, reload };
 }

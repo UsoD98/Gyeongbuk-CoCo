@@ -201,13 +201,13 @@
 - **검증**: (P2 이후) 로그인 → POI 좋아요 → 재조회 시 상태 유지.
 - **가이드**: §3 GBC019
 
-### Step P2 · GBC017 큐레이션 POI 목록 ⏸ 백엔드 대기 (스펙 `보류`)
-- **의존**: P0, **백엔드 완료** · **파일**: `api/poi.ts`(`getPois`), `ResultsPanel.tsx`
-- **내용**: `GET /poi` 파라미터(`sigunguCode`/`peopleCount`/`theme`/`contentTypeId`)로 목록. `@/mocks` import 제거.
-- **DoD**: 실제 지역/인원/테마로 필터된 POI가 렌더됨. **가이드**: §3 GBC017/018
+### Step P2 · GBC017 큐레이션 POI 목록 ☑ 완료 (백엔드 v0.5.1에서 구현됨)
+- **의존**: P0 · **파일**: `api/poi.ts`(`getPois`), `hooks/usePoiList.ts`, `ResultsPanel.tsx`, `stores/plannerStore.ts`
+- **내용**: `GET /poi` 파라미터는 실측상 `sigunguCode`(**단수·필수**)/`peopleCount`(필수)/`contentTypeId`(선택). 지역 복수 선택은 병렬 호출 후 합침. `@/mocks` POI 데이터 참조 제거.
+- **DoD**: 실제 지역/인원으로 필터된 POI가 렌더됨 ✅. ⚠️ **`theme` 파라미터는 백엔드에 없다** → 테마 필터는 불가(DoD 문구에서 제외). **가이드**: §3 GBC017/018 · 계약 주의: [`FE_계약_추적표.md`](./FE_계약_추적표.md)
 
-### Step P3 · GBC018 POI 상세 통합 ⏸ 백엔드 대기 (스펙 `보류`)
-- **의존**: P2, **백엔드 완료** · **파일**: `api/poi.ts`(`getPoi`), `PoiDrawer.tsx`
+### Step P3 · GBC018 POI 상세 통합 ⏸ 백엔드 대기 (`GET /poi/{contentId}` 미구현, v0.5.2 기준)
+- **의존**: P2(완료), **백엔드 완료** · **파일**: `api/poi.ts`(`getPoi`), `PoiDrawer.tsx`
 - **내용**: `GET /poi/{contentId}` → 상세 드로어. 카카오맵 데모(`PoiDrawer.tsx:140`)를 실연동으로 교체.
 - **DoD**: 카드/마커 클릭 → 실제 상세 정보 표시. **가이드**: §3 GBC017/018
 

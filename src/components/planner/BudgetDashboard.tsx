@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { usePoiResolver } from '@/hooks/usePoiResolver.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { BCATS, computeBudget } from '@/utils/budget.ts';
@@ -50,7 +51,7 @@ export default function BudgetDashboard({
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
   const overrides = usePlannerStore((s) => s.overrides);
-  const resolvePoi = usePlannerStore((s) => s.resolvePoi);
+  const resolvePoi = usePoiResolver();
 
   const nights = nightsFromRange(search.start, search.end);
   const { byCat, total, perPerson, n } = computeBudget(
