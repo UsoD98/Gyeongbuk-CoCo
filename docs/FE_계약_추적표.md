@@ -3,7 +3,7 @@
 > 짝 문서: [`FE_개발순서.md`](./FE_개발순서.md) §Step0 0-A · [`FE_API_연동가이드.md`](./FE_API_연동가이드.md) §1-A
 > 목적: 연동 착수 전 확정되지 않았던 계약을 추적한다.
 > **연동 중 400/422/빈결과가 나면 이 표부터 확인한다.**
-> 최종 업데이트: 2026-08-08 (#2 `sigunguCodes` 라이브 실측으로 정정 — 복수 필드·3자리 bare 코드 확정)
+> 최종 업데이트: 2026-08-15 (P2 착수로 **GBC017 `GET /poi` 계약 실측 확정** — 응답 스키마·파라미터(단수 `sigunguCode`)·`theme` 미지원·`avgPrice` null·좌표 결측 주의 추가)
 
 ---
 
@@ -35,7 +35,7 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - **값 체계(정정)**: `fetchPlacesData`가 `tourRepository.findByLDongSignguCdIn(codes)`로 조회. `Tour.lDongSignguCd`는 **3자리 bare 코드**(예 경주 `130`)이고, 시도코드 `47`은 별도 컬럼 `lDongRegnCd`라 필터에 쓰이지 않는다. 따라서 **접두 `47`을 붙이면(`47130`) 매칭 실패** → `"해당 지역의 여행지 데이터가 없습니다"`. FE `sigunguStore.value`(111/130/…)와 `mst_sigungu.sigunguCode`가 동일 3자리. openapi 예시 `35130`(TourAPI 35접두)은 이 엔드포인트와 무관.
 - **라이브 실측(2026-08-08, DB 기동 상태)**: `["47130"]` → 400 "해당 지역의 여행지 데이터가 없습니다"(fetchPlacesData 단계 즉시). `["130"]` → 지역 조회 통과(이후 AI 단계 진행). 미전송(전역) → 정상 생성(courseId 11/12).
 - **수정 반영(2026-08-08)**: `CreateCourseRequest.sigunguCodes?: string[]`로 변경. `Index`가 `selectedDestinations`(bare value 배열, 복수 선택 전부)를 그대로 전송(미선택 시 생략). `GYEONGBUK_AREA_CODE` 접두 로직 제거.
-- **잔여 주의(POI)**: `api/poi.ts`의 GBC017 `getPois` 파라미터는 아직 단수 `sigunguCode`(openapi 예 `35130`) 그대로 — POI 엔드포인트는 백엔드 `보류`라 미검증. P2 착수 시 이 create 실측처럼 필드/코드 체계 재확인 필요.
+- **POI(GBC017) 실측 확정(2026-08-15, P2)**: `GET /poi`는 **단수·필수 `sigunguCode`**가 맞다(코스 생성의 복수 `sigunguCodes`와 다름). 값은 3자리 bare(`130`)이며 백엔드가 `35`(TourAPI areaCode) 접두 5자리도 `normalizeSigunguCode`로 정규화한다(`PoiCurationServiceImpl:66`). FE는 `sigunguStore.value` 그대로 전송하고, 지역 복수 선택은 **지역마다 병렬 호출 후 합침**으로 처리한다.
 
 ### 3. `theme` ◐ (라벨 필수)
 - 타입: `@NotEmpty List<String>`. FE `theme: string[]` 정확.
@@ -59,7 +59,13 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - ✅ 상세/뷰의 `placeName`은 항상 문자열(빈값 `""` 가능), 목록/생성 응답엔 없음(`TourCourseServiceImpl.buildCourseResponse:167`).
 - ✅ 게스트 생성(email null→userId null) → `assign`은 소유자 없을 때만 1회 허용(`TourCourseServiceImpl.assignCourse:203`). Step 1→2 흐름 그대로 작동.
 - ✅ POI 좋아요 응답 `{liked, likes}` → FE `TogglePoiLikeResponse`에 `likes` 반영(`PoiLikeResponseDto.java`).
-- ⏸ `GBC020`(PATCH `/tour-course/{courseId}`) 컨트롤러 미구현 → **S8 대기**. `GET /poi`·`/poi/{contentId}` 미구현 → **P2/P3 대기**.
+- ⏸ `GBC020`(PATCH `/tour-course/{courseId}`) 컨트롤러 미구현 → **S8 대기**. `GET /poi/{contentId}` 미구현 → **P3 대기**.
+- ✅ **`GET /poi`(GBC017) 구현 확인(백엔드 v0.5.1, 2026-08-15)** — P2 완료. 응답 `{available, items[{contentId, contentTypeId, title, mapx, mapy, thumbnail, avgPrice}]}`(`PoiCurationResponseDto`/`PoiCurationItemDto`). 파라미터는 `sigunguCode`(단수·필수)·`peopleCount`(필수, **검증만 하고 필터엔 미사용**)·`contentTypeId`(선택). 인증 불필요(`SecurityConfig` permitAll).
+  - ⚠️ **`theme` 파라미터 없음** — 가이드 §3의 `theme` 필터는 백엔드에 존재하지 않는다(테마 기반 큐레이션 불가). 필요하면 백엔드 추가 요청 대상.
+  - ⚠️ **`avgPrice` 항상 null** — 근거 테이블 소실(백엔드 TODO `BOQ14`). FE는 가격 0을 '무료'가 아닌 **'가격 미정'**으로 표기한다. 예산 계산에서 POI 비용은 사용자가 직접 입력(override)해야 의미가 있다.
+  - ⚠️ **`contentTypeId` 8종** — 12/14/15/25/28/32/38/39가 모두 응답에 등장(경주 실측). FE `PoiCat` 4종으로 접어서 사용(`catOfContentType`).
+  - ⚠️ **좌표 결측치** — `mapx/mapy = 0`인 항목이 섞여 있다(경주 324건 중 1건). 좌표 사용 시 범위 검사 필수.
+  - ⚠️ **동시 호출 시 503** — TourAPI 라이브 조회라 동일/다중 요청이 겹치면 503이 나올 수 있다(실측). FE는 in-flight dedup으로 완화.
 
 ## 구현 메모
 - `CourseScheduleDay` 명명: 목업 `CourseDay`(`@/types/planner.ts`)와 충돌 회피(변경 없음).
