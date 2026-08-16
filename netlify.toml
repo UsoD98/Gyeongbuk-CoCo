@@ -1,26 +1,5 @@
-[build]
-  command = "npm run build"
-  publish = "dist"
-
-[build.environment]
-  NODE_VERSION = "22"
-
-# --- 리다이렉트는 파일에 적힌 순서대로 우선순위가 매겨진다. API 프록시가 SPA 폴백보다 먼저 와야 한다. ---
-
-# 백엔드 프록시.
-# 백엔드가 http라 https 페이지에서 직접 호출하면 mixed content로 차단된다.
-# Netlify 서버가 대신 호출하므로 차단을 피하고, 브라우저 입장에서는 동일 오리진이라
-# CORS 프리플라이트와 refreshToken 쿠키의 SameSite 문제도 함께 사라진다.
-# 전제: Netlify 환경 변수 VITE_API_BASE_URL을 비워 둘 것 (비면 /api/v1 상대경로로 요청).
 [[redirects]]
-  from = "/api/*"
-  to = "http://134.185.122.245:8080/api/:splat"
-  status = 200
-  force = true
-
-# SPA 폴백. createBrowserRouter 경로(/planner, /collections/:id 등)를
-# 새로고침·직접 접속했을 때 404가 나지 않도록 index.html로 넘긴다.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+from = "/api/*"
+to = "http://134.185.122.245:8080/api/:splat"
+status = 200
+force = true
