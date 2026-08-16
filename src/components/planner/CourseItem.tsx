@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { Clock, Pencil, X } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -27,6 +28,7 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
   const removePoi = usePlannerStore((s) => s.removePoi);
   const editCost = usePlannerStore((s) => s.editCost);
   const resetCost = usePlannerStore((s) => s.resetCost);
+  const openDrawer = usePlannerStore((s) => s.openDrawer);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: courseSortId(poi.id) });
@@ -35,20 +37,43 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
   const edited = override != null;
   const cost = edited ? override : defaultCost(poi, pax);
 
+  // 카드 전체 클릭으로 상세 열기 (사진은 드래그 핸들로 제한)
+  const openProps =
+    openDrawer && {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': `${poi.name} 상세 보기`,
+      onClick: () => openDrawer(poi.id),
+      onKeyDown: (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openDrawer(poi.id);
+        }
+      },
+    };
+
   return (
     <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...openProps}
       className={cn(
         'card relative flex gap-2.5 rounded-2xl bg-base-100 p-2.5 shadow-sm transition-shadow',
-        'cursor-grab touch-none select-none hover:shadow-md active:cursor-grabbing',
+        'cursor-default touch-none select-none hover:shadow-md',
         isDragging && 'opacity-50 ring-2 ring-primary/30',
       )}
-      {...attributes}
-      {...listeners}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div className="flex flex-1 gap-2">
-        <div className="relative items-center justify-center my-auto">
+        {/* 사진 영역만 드래그 핸들로 지정: setNodeRef + listeners/attributes 를 여기로 옮김 */}
+        <div
+          ref={setNodeRef}
+          {...attributes}
+          {...listeners}
+          className={cn(
+            'relative items-center justify-center my-auto shrink-0',
+            // 사진에서만 드래그 가능하다는 시각적 단서
+            'cursor-grab active:cursor-grabbing',
+          )}
+        >
           <ImgPlaceholder
             label={poi.img}
             src={poi.imageUrl}
