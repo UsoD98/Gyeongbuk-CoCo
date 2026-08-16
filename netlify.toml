@@ -1,5 +1,5 @@
 [[redirects]]
-from = "/api/*"
-to = "http://134.185.122.245:8080/api/:splat"
-status = 200
-force = true
+  from = "/api/*"
+  to = "http://134.185.122.245:8080/api/:splat"
+  status = 200
+  force = true
