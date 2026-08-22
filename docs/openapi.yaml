@@ -451,6 +451,8 @@ paths:
                       type: ATTRACTION
                       contentId: 123456
                       placeName: 불국사
+                      mapx: 129.3320137
+                      mapy: 35.7898159
     delete:
       tags:
       - tour-course
@@ -541,6 +543,8 @@ paths:
                       type: ATTRACTION
                       contentId: 123456
                       placeName: 불국사
+                      mapx: 129.3320137
+                      mapy: 35.7898159
   /api/v1/tour-course/{courseId}/title:
     patch:
       tags:

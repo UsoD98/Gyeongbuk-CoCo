@@ -1,10 +1,11 @@
 # FE ↔ BE 계약 추적표 (S0-A)
 
 > 짝 문서: [`FE_개발순서.md`](./FE_개발순서.md) §Step0 0-A · [`FE_API_연동가이드.md`](./FE_API_연동가이드.md) §1-A
-> **백엔드에 넘길 요청서: [`BE_계약_요청서.md`](./BE_계약_요청서.md)** — 미해결 3건(#4→R1 · #8→R2 · #9→R3)을 근거·요청안·회신 양식으로 정리했다. 회신이 오면 이 표를 갱신한다.
+> **백엔드에 넘길 요청서: [`BE_계약_요청서.md`](./BE_계약_요청서.md)** — 3건(#4→R1 · #8→R2 · #9→R3)을 근거·요청안·회신 양식으로 정리했다. **R2 는 회신·반영 완료(0.6.3), R3 은 추가 예정, R1 은 대기.**
 > 목적: 연동 착수 전 확정되지 않았던 계약을 추적한다.
 > **연동 중 400/422/빈결과가 나면 이 표부터 확인한다.**
-> 최종 업데이트: 2026-08-22 (**미해결 3건을 요청서로 승격** — #4 `userId`·#8 코스 장소 좌표·#9 찜 상태 조회를 [`BE_계약_요청서.md`](./BE_계약_요청서.md) R1·R2·R3 으로 정리. 백엔드 `aa2a555`(0.5.12) 재실측으로 세 건 모두 **여전히 미해결** 확인. R2 는 `PoiSummary` 가 이미 `mapx`/`mapy` 를 들고 있어 **추가 조회 없이** 가능하다는 사실을 새로 확인했다. #6(`transport` 영속)은 요청서 부록 B 로 판단 요청.)
+> 최종 업데이트: 2026-08-22 (**R2 회신 수용 → #8 `☑ 확정(라이브)`** — 백엔드 `cd6c7ec`(0.6.3)가 코스 상세·공개뷰 응답에 `mapx`/`mapy` 를 추가했다. 로컬 백엔드를 실제로 띄워 `GET /tour-course/1/view` 로 실측: 좌표가 **JSON number**(`129.2423293844`)로 오고, POI 캐시에 없는 `contentId` 는 `null`(그 장소는 `placeName` 도 `''`) — 코스 1의 18곳 중 6곳이 그렇다. FE 는 `CoursePlace.mapx/mapy` 를 받아 `Poi.lat/lng` 로 주입하고 장소명 지오코딩을 **좌표 null 전용 폴백으로 격하**했다(제거하지 않음 — 캐시 미스가 실재한다). Vite dev 모듈을 직접 태운 실측: 18곳 중 **12곳 즉시 렌더 · 지오코딩 왕복 0회**. ⚠️ **생성(GBC010)은 다른 DTO 라 여전히 좌표 없음**(그 화면은 GBC017 좌표로 그림 → 추가 요청 안 함). #9 는 "추가 예정" 구두 회신을 받아 `🕒 예정` 로 갱신.)
+> 이전 업데이트: 2026-08-22 (**미해결 3건을 요청서로 승격** — #4 `userId`·#8 코스 장소 좌표·#9 찜 상태 조회를 [`BE_계약_요청서.md`](./BE_계약_요청서.md) R1·R2·R3 으로 정리. 백엔드 `aa2a555`(0.5.12) 재실측으로 세 건 모두 **여전히 미해결** 확인. R2 는 `PoiSummary` 가 이미 `mapx`/`mapy` 를 들고 있어 **추가 조회 없이** 가능하다는 사실을 새로 확인했다. #6(`transport` 영속)은 요청서 부록 B 로 판단 요청.)
 > 이전 업데이트: 2026-08-15 (P2 착수로 **GBC017 `GET /poi` 계약 실측 확정** — 응답 스키마·파라미터(단수 `sigunguCode`)·`theme` 미지원·`avgPrice` null·좌표 결측 주의 추가)
 
 ---
@@ -103,8 +104,8 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 
 | # | 항목 | 질문 | FE 현재 처리 | 상태 |
 |---|------|------|--------------|:---:|
-| 8 | 코스 장소 좌표 (F5) | 코스 조회/생성 응답의 `schedule[].places[]` 에 **`mapx`/`mapy`(좌표)를 넣어 줄 수 있는가**? 지금은 좌표가 없어, 큐레이션 목록(GBC017)을 부르지 않은 지역의 코스는 지도에 찍을 좌표가 0개다(컬렉션에서 코스만 열면 그렇다). **실측(2026-08-22): 백엔드는 추가 조회 없이 줄 수 있다** — `service/PoiSummary.java` 가 이미 `mapx`/`mapy` 를 들고 있고 `TourCourseServiceImpl:269~279`(생성)·`:315~325`(상세)가 바로 그 `summaryMap` 으로 `placeName`·`thumbnailImg` 를 채운다 → `thumbnailOf`(`:374~378`)와 같은 헬퍼 1개 + DTO 2필드면 끝. `TourCourseShareResponseDto.PlaceInfo` 는 9필드로 좌표만 빠져 있다 | 장소명으로 카카오 로컬 키워드 검색을 돌려 좌표를 메운다(`utils/kakaoGeocode`). 실패 시 좌표 없음으로 남긴다 — 백엔드가 좌표를 주면 이 폴백은 필요 없다 | 📤 [요청 R2](./BE_계약_요청서.md#r2-코스-장소에-좌표mapxmapy-추가-추적표-8) |
-| 9 | 찜 상태 조회 API (F4) | 로그인 사용자의 찜 상태를 **읽을** 경로를 주실 수 있는가? (선택지: ㉮ `GET /poi/likes` → 내가 찜한 `contentId[]`, ㉯ `GET /poi`·`GET /poi/{contentId}` 응답에 `liked`(+`likes`) 필드 추가 — 인증 있을 때만 채움) | `poiLikeStore` 는 **메모리 전용**이라 새로고침 시 항상 미찜으로 시작한다. 서버 진실과 어긋나는 localStorage 캐시는 쓰지 않고, 토글 응답이 기대와 다르면 "이미 찜한 곳이어서 찜을 해제했어요"로 알린다. 조회 경로가 생기면 `poiLikeStore` 초기 주입만 추가하면 된다(구조 변경 불필요) | 📤 [요청 R3](./BE_계약_요청서.md#r3-내-찜poi-좋아요-상태-조회-경로-추적표-9) |
+| 8 | 코스 장소 좌표 (F5) | 코스 조회/생성 응답의 `schedule[].places[]` 에 **`mapx`/`mapy`(좌표)를 넣어 줄 수 있는가**? | **☑ 해결 — 백엔드 0.6.3 (`cd6c7ec`) 이 `TourCourseShareResponseDto.PlaceInfo` 에 `mapx`/`mapy`(`BigDecimal`) 추가.** **GBC012(상세)·GBC014(공개뷰)** 가 같은 DTO 를 쓰므로 양쪽 동시 적용. FE 가 요청서에서 제시한 방식 그대로 `summaryMap`(PO1 캐시, TTL 6h) 을 읽는 헬퍼 2개(`mapxOf`/`mapyOf`)만 늘어 **TourAPI 추가 조회 없음**. **라이브 실측(2026-08-22, 로컬 `ddcdbb2` 기동)**: `GET /tour-course/1/view` 가 `mapx: 129.2423293844` 처럼 **JSON number** 로 준다 → FE 타입은 `mapx?: number \| null`. 캐시에 없는 `contentId` 는 **`null`** 이고 그 장소는 `placeName` 도 `''` 다(코스 1의 18곳 중 6곳). ⚠️ **생성(GBC010)은 미적용** — 다른 DTO(`TourCourseGenerateResponseDto.PlaceInfo`)를 쓴다. 그 화면은 큐레이션 목록(GBC017) 좌표로 그리므로 **추가 요청하지 않는다**. | **FE 반영 완료** — `CoursePlace.mapx/mapy` 타입 추가 → `plannerStore.synthesizePoi` 가 `isValidTourCoord` 통과 시 `Poi.lat/lng` 주입, `mergeSources` 는 좌표를 **쌍으로** 고른다(카탈로그 우선, 없으면 코스 응답). `utils/kakaoGeocode`·`useCourseCoords` 는 **좌표 null 장소 전용 폴백으로 격하**(제거하지 않음 — 캐시 미스가 실제로 존재한다). 실측: 18곳 중 12곳 즉시 렌더, 지오코딩 왕복 **0회** | ☑ 확정(라이브) |
+| 9 | 찜 상태 조회 API (F4) | 로그인 사용자의 찜 상태를 **읽을** 경로를 주실 수 있는가? (선택지: ㉮ `GET /poi/likes` → 내가 찜한 `contentId[]`, ㉯ `GET /poi`·`GET /poi/{contentId}` 응답에 `liked`(+`likes`) 필드 추가 — 인증 있을 때만 채움) | **🕒 추가 예정(구두 회신 2026-08-22)** — GBC017·GBC018 에 `liked` 를 실어 줄 예정이라는 회신을 받았다. **아직 소스에 없음**(0.6.3 `PoiCurationItemDto`·`PoiDetailResponseDto` 에 `liked` 부재) → 착수 불가. | `poiLikeStore` 는 **메모리 전용**이라 새로고침 시 항상 미찜으로 시작한다. 서버 진실과 어긋나는 localStorage 캐시는 쓰지 않고, 토글 응답이 기대와 다르면 "이미 찜한 곳이어서 찜을 해제했어요"로 알린다. 도착하면 `poiLikeStore` 초기 주입만 추가한다(구조 변경 불필요) | 🕒 예정 |
 
 ---
 
