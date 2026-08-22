@@ -12,11 +12,17 @@ export default function PlaceholderMap({
   markers,
   route,
   onSelect,
+  onToggle,
+  dayLabel,
 }: {
   markers: MapMarker[];
   /** 활성 Day 코스 경로(순서대로). 2곳 이상일 때 점선으로 잇는다. */
   route: Poi[];
   onSelect: (poiId: string) => void;
+  /** 코스 담기/빼기 토글(F6). 카카오맵과 같은 규약. */
+  onToggle: (poiId: string) => void;
+  /** 활성 Day 이름. null 이면 토글을 숨긴다. */
+  dayLabel: string | null;
 }) {
   const linePts = route.map((p) => `${p.x},${p.y}`).join(' ');
 
@@ -70,6 +76,8 @@ export default function PlaceholderMap({
           n={m.order}
           active={m.active}
           onClick={() => onSelect(m.poi.id)}
+          onToggle={() => onToggle(m.poi.id)}
+          dayLabel={dayLabel}
         />
       ))}
 

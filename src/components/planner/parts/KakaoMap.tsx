@@ -5,7 +5,11 @@ import { hasLatLng } from '@/components/planner/mapModel.ts';
 import type { MapMarker } from '@/components/planner/mapModel.ts';
 import {
   MAP_PIN_SVG,
+  MARKER_MINUS_SVG,
+  MARKER_PLUS_SVG,
   markerBadgeClass,
+  markerToggleClass,
+  markerToggleLabel,
 } from '@/components/planner/parts/markerStyle.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { GYEONGBUK_CENTER, loadKakaoMaps } from '@/utils/kakaoMap.ts';
@@ -20,17 +24,26 @@ import type { Poi } from '@/types/planner.ts';
  *
  * 좌표가 없는 장소(코스 응답만 있고 큐레이션 카탈로그에 없는 경우)는 지도에 찍을 수 없어 건너뛴다.
  * SDK 로드 실패는 이 컴포넌트가 아니라 상위 `MapView` 가 폴백으로 처리한다(`onFail`).
+ *
+ * 마커에는 코스 담기/빼기 토글(F6-a)이 붙는다. 오버레이는 `clickable: true` 라 클릭이 지도로
+ * 새지 않으므로(pan/지도 클릭과 충돌 없음) 데스크톱·모바일에서 같은 방식으로 동작한다.
  */
 export default function KakaoMap({
   markers,
   route,
   onSelect,
+  onToggle,
+  dayLabel,
   onFail,
 }: {
   markers: MapMarker[];
   /** 활성 Day 코스 경로(순서대로). 좌표가 있는 지점만 선으로 잇는다. */
   route: Poi[];
   onSelect: (poiId: string) => void;
+  /** 코스 담기/빼기 토글(F6). 활성 Day 가 없으면 버튼을 만들지 않는다. */
+  onToggle: (poiId: string) => void;
+  /** 활성 Day 이름('Day 1'). null 이면 담을 곳이 없어 토글을 숨긴다. */
+  dayLabel: string | null;
   /** SDK 로드 실패 통지(상위가 플레이스홀더로 폴백). */
   onFail: () => void;
 }) {
@@ -38,18 +51,27 @@ export default function KakaoMap({
   const mapsRef = useRef<KakaoMaps | null>(null);
   const mapRef = useRef<KakaoMapInstance | null>(null);
   const overlaysRef = useRef(
-    new Map<string, { overlay: KakaoOverlay; badge: HTMLSpanElement }>(),
+    new Map<
+      string,
+      {
+        overlay: KakaoOverlay;
+        badge: HTMLSpanElement;
+        toggle: HTMLButtonElement;
+      }
+    >(),
   );
   const lineRef = useRef<KakaoOverlay | null>(null);
   const [ready, setReady] = useState(false);
 
   // 최신 콜백을 오버레이 클릭 핸들러(React 밖 DOM)와 1회성 마운트 effect 가 참조하도록 ref 로 고정.
   const onSelectRef = useRef(onSelect);
+  const onToggleRef = useRef(onToggle);
   const onFailRef = useRef(onFail);
   useEffect(() => {
     onSelectRef.current = onSelect;
+    onToggleRef.current = onToggle;
     onFailRef.current = onFail;
-  }, [onSelect, onFail]);
+  }, [onSelect, onToggle, onFail]);
 
   const placed = useMemo(() => markers.filter(hasLatLng), [markers]);
   // 지도 시야는 "어떤 장소가 있는가"만 바뀔 때 다시 맞춘다(드로어 열기로 재이동하면 어지럽다).
@@ -124,6 +146,7 @@ export default function KakaoMap({
       const existing = store.get(m.poi.id);
       if (existing) {
         paintBadge(existing.badge, m);
+        paintToggle(existing.toggle, m, dayLabel);
         existing.overlay.setZIndex(zIndexOf(m));
         return;
       }
@@ -136,18 +159,34 @@ export default function KakaoMap({
       button.appendChild(badge);
       button.addEventListener('click', () => onSelectRef.current(m.poi.id));
 
+      // 코스 담기/빼기 토글 — 배지 위에 겹쳐 두고, 클릭이 상세(배지)로 번지지 않게 막는다.
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      paintToggle(toggle, m, dayLabel);
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onToggleRef.current(m.poi.id);
+      });
+
+      // `inline-flex` 로 배지 크기에 딱 맞춘다 — 토글은 absolute 라 흐름에서 빠지므로
+      // 오버레이 앵커(xAnchor 0.5 / yAnchor 1 = 배지 아래 중앙)가 그대로 유지된다.
+      const wrap = document.createElement('div');
+      wrap.className = 'relative inline-flex';
+      wrap.appendChild(button);
+      wrap.appendChild(toggle);
+
       const overlay = new maps.CustomOverlay({
         position: new maps.LatLng(m.poi.lat, m.poi.lng),
-        content: button,
+        content: wrap,
         xAnchor: 0.5,
         yAnchor: 1,
         clickable: true,
         zIndex: zIndexOf(m),
       });
       overlay.setMap(map);
-      store.set(m.poi.id, { overlay, badge });
+      store.set(m.poi.id, { overlay, badge, toggle });
     });
-  }, [placed, ready]);
+  }, [placed, ready, dayLabel]);
 
   // ── 시야 맞추기 ──────────────────────────────────────────
   useEffect(() => {
@@ -267,6 +306,26 @@ function paintBadge(badge: HTMLSpanElement, m: MapMarker): void {
   badge.innerHTML = m.order
     ? `<span class="text-xs font-bold">${m.order}</span>`
     : MAP_PIN_SVG;
+}
+
+/**
+ * 토글 버튼을 현재 상태로 다시 칠한다(요소는 재사용).
+ * 활성 Day 가 없으면(`dayLabel === null`) 담을 곳이 없으므로 숨긴다.
+ */
+function paintToggle(
+  toggle: HTMLButtonElement,
+  m: MapMarker,
+  dayLabel: string | null,
+): void {
+  // `hidden` 속성은 클래스의 `display:flex`(작성자 스타일)에 밀리므로 인라인 style 로 감춘다.
+  toggle.style.display = dayLabel ? '' : 'none';
+  if (!dayLabel) return;
+  const inCourse = m.order != null;
+  toggle.className = markerToggleClass(inCourse);
+  toggle.innerHTML = inCourse ? MARKER_MINUS_SVG : MARKER_PLUS_SVG;
+  const label = markerToggleLabel(inCourse, dayLabel, m.poi.name);
+  toggle.title = label;
+  toggle.setAttribute('aria-label', label);
 }
 
 /** 경로선 색은 CSS 변수(hex)를 읽어 브랜드 색과 맞춘다. SDK 는 CSS 변수를 못 받는다. */

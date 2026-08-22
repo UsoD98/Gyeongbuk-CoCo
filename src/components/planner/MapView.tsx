@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { projectToPlaceholder } from '@/components/planner/mapModel.ts';
 import type { MapMarker } from '@/components/planner/mapModel.ts';
@@ -18,17 +18,26 @@ import type { Poi } from '@/types/planner.ts';
  *
  * 마커는 **결과 목록 ∪ 활성 Day 코스**다 — 코스 장소는 순번 배지로, 그 외는 핀으로 표시한다.
  * 코스 장소는 조회 응답에 좌표가 없어(GBC012) 장소명으로 좌표를 찾아 메운다(`useCourseCoords`).
+ *
+ * 지도에서의 코스 편집(F6)은 **마커 토글**로 한다 — 드래그 대신 마커의 +/− 버튼 한 번으로
+ * 활성 Day 에 담거나 뺀다. 드래그 방식은 카카오맵 오버레이가 React 밖 DOM 이고 모바일에서는
+ * 지도와 코스 패널이 동시에 보이지 않아(탭 전환) 성립하지 않는다 — 판단 근거는 보드 F6 참조.
  */
 export default function MapView({ pois }: { pois: Poi[] }) {
   const course = usePlannerStore((s) => s.course);
   const activeDay = usePlannerStore((s) => s.activeDay);
   const drawerPoiId = usePlannerStore((s) => s.drawer.poiId);
   const openDrawer = usePlannerStore((s) => s.openDrawer);
+  const addPoi = usePlannerStore((s) => s.addPoi);
+  const removePoi = usePlannerStore((s) => s.removePoi);
   // 코스 항목은 목이 아니라 해석기로 푼다(API 코스 장소·큐레이션 카탈로그 병합).
   const resolvePoi = usePoiResolver();
   const [kakaoFailed, setKakaoFailed] = useState(false);
 
-  const dayItems = course.days[activeDay]?.items;
+  const day = course.days[activeDay];
+  const dayItems = day?.items;
+  // 담을 Day 가 없으면(빈 코스) 토글을 숨긴다.
+  const dayLabel = day?.label ?? null;
 
   /** 활성 Day 경로(코스 순서 그대로). */
   const route = useMemo(
@@ -60,6 +69,20 @@ export default function MapView({ pois }: { pois: Poi[] }) {
     }));
   }, [route, pois, drawerPoiId]);
 
+  /**
+   * 마커 토글(F6) — 활성 Day 에 있으면 빼고, 없으면 담는다.
+   * 담기는 `addPoi`(맨 뒤 삽입·중복은 스토어가 toast 로 거절), 빼기는 `removePoi`.
+   * 둘 다 `dirty` 를 세우므로 저장 버튼이 '변경 저장'으로 바뀐다.
+   */
+  const toggleInCourse = useCallback(
+    (poiId: string) => {
+      if (!day) return;
+      if (day.items.includes(poiId)) removePoi(activeDay, poiId);
+      else addPoi(poiId);
+    },
+    [activeDay, addPoi, day, removePoi],
+  );
+
   if (kakaoFailed) {
     // 폴백 지도는 % 좌표로 그린다 → 실좌표가 있는 장소는 그 집합에 맞춰 재투영해야
     // 코스 장소(원래 x/y 가 전부 50)가 중앙에 겹치지 않는다.
@@ -76,6 +99,8 @@ export default function MapView({ pois }: { pois: Poi[] }) {
         markers={markers.map((m) => ({ ...m, poi: place(m.poi) }))}
         route={route.map(place)}
         onSelect={openDrawer}
+        onToggle={toggleInCourse}
+        dayLabel={dayLabel}
       />
     );
   }
@@ -85,6 +110,8 @@ export default function MapView({ pois }: { pois: Poi[] }) {
       markers={markers}
       route={route}
       onSelect={openDrawer}
+      onToggle={toggleInCourse}
+      dayLabel={dayLabel}
       onFail={() => setKakaoFailed(true)}
     />
   );
