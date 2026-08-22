@@ -5,6 +5,7 @@ import type {
   CoursePlace,
   CourseScheduleDay,
   CreateCourseResponse,
+  Transport,
 } from '@/api/tourCourse.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
@@ -55,12 +56,27 @@ export interface LoadFromApiContext {
   end: string;
   pax: number;
   themes: string[];
+  /** 홈에서 고른 이동수단(생성 요청에 실어 보낸 값과 같은 것). 예산 교통비 추정 기준(F2). */
+  transport: Transport;
 }
 
 interface PlannerState {
   /** 서버 코스 id. 게스트 생성 후 저장(GBC016)·상세(GBC012)에서 사용. 미생성 시 null. */
   courseId: number | null;
   search: Search;
+  /**
+   * 코스의 이동수단(F2). 생성(홈 검색 값)·상세 응답에서 주입하고 예산 탭에서 바꿀 수 있다.
+   * ⚠️ **서버에 되돌려 보낼 자리가 없다** — GBC020 바디는 `{schedule}` 뿐이고 백엔드에
+   * `transport` 수정 경로가 없다(백엔드 소스 실측). 그래서 이 값은 세션 내 계산·표시 전용이고
+   * 코스를 다시 불러오면 서버 값으로 되돌아간다. 계약 추적표 #6.
+   */
+  transport: Transport;
+  /**
+   * 사용자가 직접 입력한 교통비(총액, F2). null 이면 이동수단 기반 추정치를 쓴다.
+   * `overrides`(장소별 금액)와 달리 저장 대상이 아니다 — 백엔드가 교통비를 산정·저장하지
+   * 않기로 했고(0.5.9 BU3 취소, 이동 비용은 FE 전담) 실을 필드도 없다.
+   */
+  transportOverride: number | null;
   course: Course;
   /**
    * API 생성 코스의 장소를 UI Poi 로 임시 표현한 레지스트리(key = String(contentId)).
@@ -130,6 +146,12 @@ interface PlannerState {
   reorder: (dayIdx: number, from: number, to: number) => void;
   editCost: (poiId: string, val: number) => void;
   resetCost: (poiId: string) => void;
+  /** 이동수단 변경(F2). 교통비·(F3)이동시간 추정이 즉시 따라온다. */
+  setTransport: (transport: Transport) => void;
+  /** 교통비를 직접 입력(총액). 음수는 0으로 잘라 넣는다. */
+  setTransportOverride: (val: number) => void;
+  /** 교통비 직접 입력을 해제하고 추정치로 되돌린다. */
+  resetTransportOverride: () => void;
   /** 방문 시각 지정 'HH:mm'(빈 값·형식 불일치는 지정 해제). 순서와 어긋나면 toast 로 알린다. */
   setPlaceTime: (poiId: string, time: string) => void;
   /** 체류시간(분) 지정. 숫자가 아니면 지정 해제. */
@@ -295,6 +317,8 @@ function mergeSources(
 export const usePlannerStore = create<PlannerState>((set, get) => ({
   courseId: null,
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
+  transport: 'CAR',
+  transportOverride: null,
   course: { title: '', days: [] },
   apiPois: {},
   poiCatalog: {},
@@ -338,6 +362,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       courseId: res.courseId,
       apiPois,
       baseSchedule: res.schedule,
+      transport: ctx.transport,
+      transportOverride: null,
       course: { title: ctx.title, days },
       search: {
         dests: ctx.dests,
@@ -372,6 +398,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       courseId: detail.courseId,
       apiPois,
       baseSchedule: detail.schedule,
+      transport: detail.transport,
+      transportOverride: null,
       course: { title: detail.title, days },
       search: {
         // 상세 응답엔 sigunguCode/지역이 없다 → dests 비움(Planner 는 '경상북도'로 폴백).
@@ -477,6 +505,21 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       delete next[poiId];
       return { overrides: next, dirty: true };
     }),
+
+  // 이동수단·교통비는 **dirty 를 세우지 않는다** — 서버에 보낼 자리가 없어서(계약 추적표 #6)
+  // '변경 저장'을 활성화하면 저장 후 '저장됨'으로 바뀌는데 정작 수단은 서버에 남지 않아
+  // 사용자를 속이게 된다. 저장 경로가 생기면 여기에 `dirty: true` 를 더하면 된다.
+  setTransport: (transport) =>
+    set((s) => (s.transport === transport ? {} : { transport })),
+
+  setTransportOverride: (val) =>
+    set((s) => {
+      const next = Number.isFinite(val) ? Math.max(0, Math.round(val)) : 0;
+      return s.transportOverride === next ? {} : { transportOverride: next };
+    }),
+
+  resetTransportOverride: () =>
+    set((s) => (s.transportOverride == null ? {} : { transportOverride: null })),
 
   setPlaceTime: (poiId, time) => {
     const s = get();

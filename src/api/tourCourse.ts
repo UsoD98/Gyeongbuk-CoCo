@@ -112,6 +112,10 @@ export interface UpdateCourseTitleRequest {
 export interface UpdateCourseRequest {
   schedule: CourseScheduleDay[];
 }
+// ⚠️ 코스 헤더(`transport`·`peopleCount`·기간)는 이 바디로 바꿀 수 없다 — 백엔드에 수정 경로가
+//    없고(`transport` 는 생성 시 1회 저장), 교통비도 서버가 산정·저장하지 않는다(0.5.9 에서
+//    BU3 취소 — 이동 비용은 FE 전담). 그래서 F2 의 이동수단·교통비 변경은 세션 내 계산·표시
+//    전용이다. 계약 추적표 #6.
 
 // ── API 함수 ───────────────────────────────────────────────
 
