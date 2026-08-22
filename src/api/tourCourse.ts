@@ -43,6 +43,21 @@ export interface CoursePlace {
   operatingHours?: string | null;
   /** 1인 예상 비용(원). 백엔드가 실데이터 없으면 타입별 기본값을 넣고, 숙박은 null. */
   cost?: number | null;
+  /**
+   * 장소 좌표 — `mapx`=경도, `mapy`=위도 (TourAPI 원본 단위, JSON number 실측).
+   *
+   * ⚠️ **상세(GBC012)·공개뷰(GBC014)에만 담긴다** — 생성(GBC010)은 다른 DTO
+   * (`TourCourseGenerateResponseDto.PlaceInfo`)를 쓰고 거기엔 좌표가 없다(백엔드 0.6.3
+   * `cd6c7ec` 는 `TourCourseShareResponseDto` 만 손댔다). 생성 직후 화면은 큐레이션
+   * 목록(GBC017)의 좌표로 지도를 그린다.
+   *
+   * 백엔드 POI 캐시에 그 `contentId` 가 없으면 **null** 이다(실측: 같은 코스 안에서
+   * `placeName: ''` 인 장소가 좌표도 null). 그 경우 좌표 없음으로 다루고
+   * `utils/kakaoGeocode` 장소명 폴백에 맡긴다. 유효성 판정은 `utils/coords.isValidTourCoord`
+   * (0·대한민국 범위 밖 좌표를 걸러낸다).
+   */
+  mapx?: number | null;
+  mapy?: number | null;
 }
 
 /**
@@ -123,6 +138,7 @@ export interface UpdateCourseRequest {
  * POST /tour-course — AI 코스 생성 (비로그인 허용).
  * 응답엔 courseId + schedule(장소는 seq/time/type/contentId)만 담긴다.
  * 장소명/가격/좌표는 없으므로 UI는 POI 상세(GBC018) 연동 전까지 placeholder로 표시한다.
+ * ⚠️ 좌표(`mapx`/`mapy`)는 이 응답에 **없다** — 상세/공개뷰 응답에만 있다(`CoursePlace` 주석).
  */
 export async function createCourse(
   req: CreateCourseRequest,
@@ -148,7 +164,8 @@ export async function getMyCourses(): Promise<CourseSummary[]> {
 /**
  * GET /tour-course/{courseId} — 코스 상세 조회 (GBC012). 소유자 인증 필수(Bearer).
  * 응답 data 는 `CourseDetail`(헤더 + `schedule[].places[]`, 장소마다 `placeName` 포함).
- * 목록·생성 응답과 달리 실제 장소명이 담기므로 placeholder 없이 렌더할 수 있다.
+ * 목록·생성 응답과 달리 실제 장소명과 **좌표(`mapx`/`mapy`)**가 담기므로 placeholder 없이
+ * 렌더하고 지도 마커도 바로 찍을 수 있다(백엔드 0.6.3, 계약 추적표 #8).
  * ⚠️ 소유자가 아니면 백엔드가 401/403 을 반환한다(401 은 client 인터셉터가 처리).
  */
 export async function getCourse(courseId: number): Promise<CourseDetail> {
