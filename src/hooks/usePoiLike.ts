@@ -15,6 +15,9 @@ import { toast } from '@/stores/toastStore.ts';
  *  - 낙관적 업데이트: 클릭 즉시 스토어 상태를 뒤집고, 실패 시 이전 값으로 롤백 + 에러 토스트.
  *  - 서버 호출은 **실 contentId(양수 정수)** 일 때만 한다. 목 POI(슬러그 id)는 실 contentId 가
  *    없어 로컬 상태만 반영한다 — 실동작(서버 반영·재조회 유지) 검증은 POI 실데이터(P2/P3) 이후.
+ *  - 응답 `liked` 가 낙관적 기대와 다르면 서버 진실을 따르고 그 사실을 toast 로 알린다.
+ *    찜 상태 조회 API 가 없어(계약 추적표 #9) 새로고침 후 하트는 항상 미찜으로 시작하므로,
+ *    그 상태에서 누른 클릭이 실제로는 '해제'가 되는 경우를 사용자가 알 수 있어야 한다.
  *
  * 컴포넌트(`LikeButton`)는 `{ liked, pending, toggle }` 만 소비한다.
  */
@@ -52,6 +55,16 @@ export function usePoiLike(poiId: string): PoiLike {
     void togglePoiLike(contentId)
       .then((res) => {
         setLiked(poiId, res.liked, res.likes); // 서버 진실로 확정
+        if (res.liked !== next) {
+          // 서버가 우리 기대와 반대를 돌려줬다 = 우리가 알던 찜 상태가 낡았다.
+          // 찜 상태를 되돌려주는 조회 API 가 없어(계약 추적표 #9) 새로고침 후엔 항상
+          // 미찜으로 보이므로, 그 클릭이 실제로는 '해제'였다는 걸 사용자에게 알려준다.
+          toast.info(
+            res.liked
+              ? '찜에 추가했어요'
+              : '이미 찜한 곳이어서 찜을 해제했어요',
+          );
+        }
       })
       .catch((error) => {
         setLiked(poiId, prev); // 롤백
