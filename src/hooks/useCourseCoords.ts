@@ -5,14 +5,16 @@ import { geocodePlaceName } from '@/utils/kakaoGeocode.ts';
 import type { Poi } from '@/types/planner.ts';
 
 /**
- * 좌표가 없는 코스 장소의 좌표를 장소명으로 찾아 스토어에 채운다(F5).
+ * 좌표가 없는 코스 장소의 좌표를 장소명으로 찾아 스토어에 채운다(F5) — **폴백 전용**.
  *
- * 코스 조회 응답에는 좌표가 없어서, 컬렉션에서 코스를 열면(지역 미선택 → 큐레이션 목록 미조회)
- * 지도에 찍을 좌표가 하나도 없다. 이 훅이 채운 좌표는 `plannerStore.placeCoords` 에 남고
+ * 코스 상세·공개뷰(GBC012·014)가 `mapx`/`mapy` 를 주게 된 뒤(백엔드 0.6.3, 추적표 #8)
+ * 대부분의 장소는 이 훅에 도달하기 전에 이미 좌표를 갖는다. 남는 대상은 백엔드 POI 캐시에
+ * 없어 좌표가 `null` 로 온 장소뿐이다. 이 훅이 채운 좌표는 `plannerStore.placeCoords` 에 남고
  * `usePoiResolver`/`resolvePoi` 가 좌표 없는 장소에만 얹어 준다.
  *
  * - 이름이 placeholder(`장소 #id`)면 검색해도 의미가 없으니 건너뛴다.
- * - 좌표를 이미 아는 장소(큐레이션 카탈로그·이전 검색 결과)는 대상이 아니다.
+ *   (실측: 캐시 미스 장소는 `placeName` 도 빈 문자열이라 대개 여기서 걸러진다.)
+ * - 좌표를 이미 아는 장소(코스 응답·큐레이션 카탈로그·이전 검색 결과)는 대상이 아니다.
  * - 실패는 조용히 무시한다(지도는 "표시할 좌표가 없어요" 상태로 남는다).
  */
 export function useCourseCoords(pois: Poi[]): void {

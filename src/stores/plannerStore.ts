@@ -9,6 +9,7 @@ import type {
 } from '@/api/tourCourse.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
+import { isValidTourCoord } from '@/utils/coords.ts';
 import { httpsUrl } from '@/utils/format.ts';
 import type {
   Course,
@@ -108,8 +109,9 @@ interface PlannerState {
    */
   placeTimes: Record<string, PlaceTimeEdit>;
   /**
-   * poiId → 장소명으로 찾은 좌표 (F5). 코스 조회 응답(GBC012·014)에는 좌표가 없어서,
-   * 큐레이션 목록(GBC017)을 부르지 않은 채 코스를 열면 지도에 찍을 좌표가 없다 → 이 자리로 메운다.
+   * poiId → 장소명으로 찾은 좌표 (F5). **폴백 전용**이다 — 코스 상세·공개뷰(GBC012·014)가
+   * 좌표를 주게 된 뒤(백엔드 0.6.3, 추적표 #8) 남은 공백은 백엔드 POI 캐시 미스로
+   * `mapx`/`mapy` 가 null 인 장소뿐이라, 그 장소만 장소명 검색으로 메운다.
    * ⚠️ **코스를 다시 불러도 비우지 않는다** — contentId 별 좌표는 변하지 않는 사실이라 캐시로 둔다.
    */
   placeCoords: Record<string, LatLng>;
@@ -245,6 +247,9 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
     place.contentName?.trim() ||
     placeholderPlaceName(place.contentId);
   const cost = place.cost ?? 0;
+  // 좌표(백엔드 0.6.3 부터 상세·공개뷰 응답에 온다). 캐시 미스면 null 이라 좌표 없음으로 둔다
+  // → `useCourseCoords` 의 장소명 폴백이 그 장소만 메운다. 추적표 #8.
+  const hasCoord = isValidTourCoord(place.mapx, place.mapy);
   return {
     id: String(place.contentId),
     region,
@@ -260,6 +265,8 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
     reviews: 0,
     x: 50,
     y: 50,
+    lat: hasCoord ? (place.mapy as number) : undefined,
+    lng: hasCoord ? (place.mapx as number) : undefined,
     tags: [],
     img: CATEGORIES[cat].label,
     imageUrl: httpsUrl(place.thumbnailImg),
@@ -271,14 +278,16 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
  * 코스 장소(생성/상세 응답)와 큐레이션 카탈로그(GBC017)를 한 Poi 로 합친다.
  *
  * 두 출처가 채우는 칸이 다르다:
- * - 카탈로그(GBC017): 실 좌표(x/y)·분류(contentTypeId 직결)·장소명
+ * - 카탈로그(GBC017): 폴백 지도 % 좌표(x/y)·분류(contentTypeId 직결)·장소명
  * - 코스 응답(GBC010/012): 방문 시각·운영시간·1인 비용, 그리고 백엔드가 `contentName` 을
  *   넣어주면 장소명까지
+ * - 실경위도(lat/lng): **양쪽 다** 준다(코스는 상세·공개뷰만, 백엔드 0.6.3). 값의 출처가
+ *   같은 TourAPI 라 동일하지만, 어느 한쪽이 캐시 미스로 비어 있을 수 있어 있는 쪽을 쓴다.
  *
  * 기본은 카탈로그를 깔고 코스 쪽 값이 **있을 때만** 덮어쓴다(빈 문자열·0 = 정보 없음).
  * 분류(cat)는 카탈로그 기준 — 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
  *
- * `coords`(F5): 두 출처 모두 좌표가 없을 때만 얹는 장소명 기반 좌표. 실좌표(카탈로그)를
+ * `coords`(F5): 두 출처 모두 좌표가 없을 때만 얹는 장소명 기반 좌표. API 좌표를
  * 덮어쓰지 않는다 — 검색 결과보다 API 좌표가 언제나 정확하다.
  */
 export function mergePoi(
@@ -303,8 +312,12 @@ function mergeSources(
   if (!fromCatalog) return fromCourse;
   const courseHasName =
     fromCourse.name !== placeholderPlaceName(fromCourse.id);
+  // 좌표는 **쌍으로** 고른다 — lat 은 한쪽, lng 은 다른 쪽에서 집으면 엉뚱한 지점이 된다.
+  const coordSource = fromCatalog.lat != null ? fromCatalog : fromCourse;
   return {
     ...fromCatalog,
+    lat: coordSource.lat,
+    lng: coordSource.lng,
     name: courseHasName ? fromCourse.name : fromCatalog.name,
     price: fromCourse.price || fromCatalog.price,
     priceNote: fromCourse.price ? fromCourse.priceNote : fromCatalog.priceNote,
