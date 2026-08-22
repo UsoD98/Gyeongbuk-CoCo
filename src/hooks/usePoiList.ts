@@ -6,6 +6,7 @@ import { useAsync } from '@/hooks/useAsync.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
+import { isValidTourCoord as validCoord } from '@/utils/coords.ts';
 import { httpsUrl } from '@/utils/format.ts';
 import type { Poi } from '@/types/planner.ts';
 
@@ -66,22 +67,6 @@ function fetchPoisShared(
   });
   inflight.set(key, req);
   return req;
-}
-
-/**
- * 좌표 유효성 — TourAPI 데이터에 좌표가 `0`인 항목이 섞여 있다(경주 실측 1건).
- * 이런 값을 bounding box 계산에 넣으면 span 이 폭발해 나머지 전부가 한 점에 뭉친다.
- * 대한민국(경북 포함) 경위도 범위 밖이면 좌표 없음으로 간주한다.
- */
-function validCoord(mapx: number | null, mapy: number | null): boolean {
-  return (
-    mapx != null &&
-    mapy != null &&
-    mapx >= 124 &&
-    mapx <= 132 &&
-    mapy >= 33 &&
-    mapy <= 39
-  );
 }
 
 /**
