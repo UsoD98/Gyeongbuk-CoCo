@@ -24,6 +24,8 @@ export interface KakaoLatLng {
 export interface KakaoLatLngBounds {
   extend: (latlng: KakaoLatLng) => void;
   isEmpty: () => boolean;
+  getSouthWest: () => KakaoLatLng;
+  getNorthEast: () => KakaoLatLng;
 }
 
 export interface KakaoMap {
@@ -31,12 +33,26 @@ export interface KakaoMap {
   getLevel: () => number;
   setLevel: (level: number, options?: { animate?: boolean }) => void;
   setBounds: (bounds: KakaoLatLngBounds, ...padding: number[]) => void;
+  /** 현재 보이는 영역. 화면 1도당 픽셀(마커 클러스터링 배율) 계산에 쓴다. */
+  getBounds: () => KakaoLatLngBounds;
   relayout: () => void;
+}
+
+/**
+ * SDK 이벤트 바인딩(`kakao.maps.event`). 줌이 바뀌면 마커 겹침이 달라져 클러스터를
+ * 다시 계산해야 하므로 `zoom_changed`·`idle` 을 듣는다.
+ * ⚠️ 구버전·부분 로드에서 없을 수 있어 호출부는 optional 로 다룬다.
+ */
+export interface KakaoEvent {
+  addListener: (target: unknown, type: string, handler: () => void) => void;
+  removeListener: (target: unknown, type: string, handler: () => void) => void;
 }
 
 export interface KakaoOverlay {
   setMap: (map: KakaoMap | null) => void;
   setZIndex: (z: number) => void;
+  /** 겹침 해소로 마커를 밀어낼 때 위치를 갱신한다(`CustomOverlay` 전용). */
+  setPosition?: (latlng: KakaoLatLng) => void;
 }
 
 /** 카카오 로컬 키워드 검색 결과(쓰는 필드만). `x`=경도, `y`=위도, 둘 다 문자열. */
@@ -80,6 +96,8 @@ export interface KakaoMaps {
     strokeStyle?: string;
   }) => KakaoOverlay;
   load: (callback: () => void) => void;
+  /** 이벤트 바인딩. 없으면 클러스터를 줌 변화에 맞춰 다시 계산하지 않는다(마커는 그대로 뜬다). */
+  event?: KakaoEvent;
   /**
    * 로컬 검색(장소명→좌표). `libraries=services` 로 SDK 를 받아야 존재한다.
    * 앱에 '로컬' API 가 비활성이면 호출 시 status 가 ERROR 로 떨어진다(예외는 아님).

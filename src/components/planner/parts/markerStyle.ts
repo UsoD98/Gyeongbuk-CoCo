@@ -52,6 +52,24 @@ export function markerToggleLabel(
     : `${poiName} ${dayLabel}에 추가`;
 }
 
+/**
+ * 겹쳐서 하나로 접힌 POI 그룹 배지의 클래스 (F7).
+ *
+ * 코스 순번 배지와 헷갈리지 않게 **반대로** 칠한다 — 순번 배지는 카테고리 색 위에 흰 숫자지만
+ * 이쪽은 흰 바탕(`bg-base-100`)에 브랜드색 테두리·숫자다. 크기도 32px 로 한 단계 키워
+ * "여러 곳이 묶여 있다"는 신호를 준다. 누르면 확대돼 풀리므로 커서는 손가락.
+ */
+export function markerClusterClass(): string {
+  return cn(
+    'flex h-8 w-8 items-center justify-center rounded-full bg-base-100 text-xs font-bold text-primary shadow-md ring-2 ring-primary transition-transform hover:scale-110',
+  );
+}
+
+/** 접힌 그룹 배지의 접근성 라벨·툴팁. 개수와 "누르면 풀린다"를 함께 밝힌다. */
+export function markerClusterLabel(count: number): string {
+  return `이 자리에 겹친 ${count}곳 — 확대해서 펼치기`;
+}
+
 /** 토글 아이콘(lucide `plus`/`minus`). DOM 마커용 정적 SVG 문자열. */
 export const MARKER_PLUS_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
