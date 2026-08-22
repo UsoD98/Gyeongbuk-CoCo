@@ -42,6 +42,7 @@ export function useCourseUpdate(): CourseUpdate {
       baseSchedule: state.baseSchedule,
       resolve: state.resolvePoi,
       overrides: state.overrides,
+      placeTimes: state.placeTimes,
       startDate: state.search.start,
       pax: state.search.pax,
     });

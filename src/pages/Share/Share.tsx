@@ -8,6 +8,7 @@ import { getApiErrorMessage } from '@/api/types.ts';
 import ErrorState from '@/components/common/ErrorState.tsx';
 import Loading from '@/components/common/Loading.tsx';
 import { useAsync } from '@/hooks/useAsync.ts';
+import { useTravelThemeStore } from '@/stores/travelThemeStore.ts';
 import { cn } from '@/utils/cn.ts';
 import {
   formatDate,
@@ -69,6 +70,9 @@ function DayCard({
  */
 export default function Share() {
   const { courseId } = useParams();
+  // 서버는 테마를 코드('003')로 준다 → 홈 검색바와 같은 마스터로 이름을 붙인다.
+  // 마스터에 없는 코드는 코드 그대로 보여 준다(빈 칩으로 사라지지 않게).
+  const getThemeLabel = useTravelThemeStore((state) => state.getThemeLabel);
   const fetcher = useCallback(async (): Promise<CourseDetail> => {
     const id = Number(courseId);
     if (!Number.isInteger(id) || id <= 0) {
@@ -124,7 +128,7 @@ export default function Share() {
           <div className="flex flex-wrap gap-1.5">
             {data.theme.map((t) => (
               <span key={t} className="badge badge-sm badge-ghost">
-                {t}
+                {getThemeLabel(t) ?? t}
               </span>
             ))}
           </div>

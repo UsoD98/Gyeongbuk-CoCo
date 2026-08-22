@@ -14,8 +14,10 @@ import type { Poi } from '@/types/planner.ts';
 export function usePoiResolver(): (id: string) => Poi | undefined {
   const apiPois = usePlannerStore((s) => s.apiPois);
   const poiCatalog = usePlannerStore((s) => s.poiCatalog);
+  // 장소명으로 찾은 좌표(F5)도 함께 구독한다 — 좌표가 도착하면 지도가 다시 그려져야 한다.
+  const placeCoords = usePlannerStore((s) => s.placeCoords);
   return useCallback(
-    (id: string) => mergePoi(apiPois[id], poiCatalog[id]),
-    [apiPois, poiCatalog],
+    (id: string) => mergePoi(apiPois[id], poiCatalog[id], placeCoords[id]),
+    [apiPois, poiCatalog, placeCoords],
   );
 }

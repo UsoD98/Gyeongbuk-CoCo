@@ -12,6 +12,9 @@ export const TRANSPORT_LABEL: Record<Transport, string> = {
   WALK: '도보',
 };
 
+/** 이동수단 선택 순서(홈 검색 폼 `Index.TRANSPORT_OPTIONS` 와 동일 순서). */
+export const TRANSPORT_ORDER: Transport[] = ['CAR', 'PUBLIC_TRANSPORT', 'WALK'];
+
 /**
  * 코스 일정 장소 타입(백엔드 PlaceType, 실측 7종) → 한국어 라벨.
  * 미매핑 타입은 원문을 그대로 보여준다(폴백).

@@ -5,11 +5,19 @@ import type {
   CoursePlace,
   CourseScheduleDay,
   CreateCourseResponse,
+  Transport,
 } from '@/api/tourCourse.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { httpsUrl } from '@/utils/format.ts';
-import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
+import type {
+  Course,
+  CourseDay,
+  LatLng,
+  PlaceTimeEdit,
+  Poi,
+  PoiCat,
+} from '@/types/planner.ts';
 
 /**
  * 플래너 단일 도메인 스토어.
@@ -48,12 +56,27 @@ export interface LoadFromApiContext {
   end: string;
   pax: number;
   themes: string[];
+  /** 홈에서 고른 이동수단(생성 요청에 실어 보낸 값과 같은 것). 예산 교통비 추정 기준(F2). */
+  transport: Transport;
 }
 
 interface PlannerState {
   /** 서버 코스 id. 게스트 생성 후 저장(GBC016)·상세(GBC012)에서 사용. 미생성 시 null. */
   courseId: number | null;
   search: Search;
+  /**
+   * 코스의 이동수단(F2). 생성(홈 검색 값)·상세 응답에서 주입하고 예산 탭에서 바꿀 수 있다.
+   * ⚠️ **서버에 되돌려 보낼 자리가 없다** — GBC020 바디는 `{schedule}` 뿐이고 백엔드에
+   * `transport` 수정 경로가 없다(백엔드 소스 실측). 그래서 이 값은 세션 내 계산·표시 전용이고
+   * 코스를 다시 불러오면 서버 값으로 되돌아간다. 계약 추적표 #6.
+   */
+  transport: Transport;
+  /**
+   * 사용자가 직접 입력한 교통비(총액, F2). null 이면 이동수단 기반 추정치를 쓴다.
+   * `overrides`(장소별 금액)와 달리 저장 대상이 아니다 — 백엔드가 교통비를 산정·저장하지
+   * 않기로 했고(0.5.9 BU3 취소, 이동 비용은 FE 전담) 실을 필드도 없다.
+   */
+  transportOverride: number | null;
   course: Course;
   /**
    * API 생성 코스의 장소를 UI Poi 로 임시 표현한 레지스트리(key = String(contentId)).
@@ -78,6 +101,18 @@ interface PlannerState {
   activeDay: number;
   /** poiId → 사용자가 수정한 금액 */
   overrides: Record<string, number>;
+  /**
+   * poiId → 사용자가 지정한 방문 시각·체류시간 (F1). 지정하지 않은 장소는 키가 없고,
+   * 그 경우 서버 원본(`baseSchedule`)의 시각·체류시간과 타입 기본값을 그대로 쓴다.
+   * ⚠️ key 가 poiId 라 같은 장소를 여러 Day 에 담으면 시간도 공유된다(`overrides` 와 같은 규약).
+   */
+  placeTimes: Record<string, PlaceTimeEdit>;
+  /**
+   * poiId → 장소명으로 찾은 좌표 (F5). 코스 조회 응답(GBC012·014)에는 좌표가 없어서,
+   * 큐레이션 목록(GBC017)을 부르지 않은 채 코스를 열면 지도에 찍을 좌표가 없다 → 이 자리로 메운다.
+   * ⚠️ **코스를 다시 불러도 비우지 않는다** — contentId 별 좌표는 변하지 않는 사실이라 캐시로 둔다.
+   */
+  placeCoords: Record<string, LatLng>;
   drawer: Drawer;
   /**
    * 서버에 아직 반영하지 않은 편집(추가·제거·재정렬·비용)이 있는지 (GBC020).
@@ -111,6 +146,20 @@ interface PlannerState {
   reorder: (dayIdx: number, from: number, to: number) => void;
   editCost: (poiId: string, val: number) => void;
   resetCost: (poiId: string) => void;
+  /** 이동수단 변경(F2). 교통비·(F3)이동시간 추정이 즉시 따라온다. */
+  setTransport: (transport: Transport) => void;
+  /** 교통비를 직접 입력(총액). 음수는 0으로 잘라 넣는다. */
+  setTransportOverride: (val: number) => void;
+  /** 교통비 직접 입력을 해제하고 추정치로 되돌린다. */
+  resetTransportOverride: () => void;
+  /** 방문 시각 지정 'HH:mm'(빈 값·형식 불일치는 지정 해제). 순서와 어긋나면 toast 로 알린다. */
+  setPlaceTime: (poiId: string, time: string) => void;
+  /** 체류시간(분) 지정. 숫자가 아니면 지정 해제. */
+  setPlaceDuration: (poiId: string, minutes: number) => void;
+  /** 시각·체류시간 지정 해제(서버 원본 값으로 되돌림). */
+  resetPlaceTime: (poiId: string) => void;
+  /** 장소명으로 찾은 좌표를 등록(F5). 이미 아는 좌표는 덮어쓰지 않는다. */
+  setPlaceCoords: (poiId: string, coords: LatLng) => void;
   /** 편집 내용을 서버에 반영 완료로 표시(GBC020 성공 시 `useCourseUpdate` 가 호출). */
   markPristine: () => void;
   openDrawer: (poiId: string) => void;
@@ -127,6 +176,53 @@ const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
   ACCOMMODATION: 'stay',
   FOOD: 'food',
 };
+
+/** 체류시간 상한(분). 하루를 넘기는 입력은 잘라 낸다. */
+const MAX_DURATION_MINUTES = 24 * 60;
+
+/** 'HH:mm' 만 통과시킨다. 빈 값·형식 불일치는 "지정 해제"(undefined)로 본다. */
+const normalizeTime = (value: string): string | undefined =>
+  /^\d{2}:\d{2}$/.test(value) ? value : undefined;
+
+/**
+ * 시간 지정 맵에 한 장소의 편집분을 병합한다(F1).
+ * 시각·체류시간이 모두 미지정으로 돌아가면 **키를 지운다** — "지정된 장소만 담는다"는
+ * 불변식을 지켜 `placeTimes` 가 빈 껍데기 항목으로 불어나지 않게 한다.
+ */
+function withTimeEdit(
+  placeTimes: Record<string, PlaceTimeEdit>,
+  poiId: string,
+  patch: PlaceTimeEdit,
+): Record<string, PlaceTimeEdit> {
+  const next = { ...placeTimes };
+  const merged: PlaceTimeEdit = { ...next[poiId], ...patch };
+  if (merged.time == null && merged.durationMinutes == null) delete next[poiId];
+  else next[poiId] = merged;
+  return next;
+}
+
+/** poiId 의 실효 방문 시각('HH:mm') — 사용자 지정값 우선, 없으면 서버 원본. 없으면 빈 문자열. */
+const effectiveTime = (state: PlannerState, poiId: string): string =>
+  state.placeTimes[poiId]?.time ?? state.resolvePoi(poiId)?.visitTime ?? '';
+
+/**
+ * 방문 시각이 코스 순서와 어긋났으면 알린다(F1).
+ * **자동 정렬은 하지 않는다** — 사용자가 의도한 코스 순서를 시각 때문에 덮어쓰지 않기 위해서다.
+ * 시각을 모르는 장소는 저장 시 슬롯이 배분되므로 비교에서 제외한다.
+ */
+function warnIfTimesOutOfOrder(state: PlannerState, poiId: string) {
+  const day = state.course.days.find((d) => d.items.includes(poiId));
+  if (!day) return;
+  const times = day.items
+    .map((id) => effectiveTime(state, id))
+    .filter((t) => t !== '');
+  const outOfOrder = times.some((t, i) => i > 0 && t < times[i - 1]);
+  if (outOfOrder) {
+    toast.info(
+      `${day.label} 방문 시각 순서가 어긋났어요 — 코스 순서는 그대로 저장돼요`,
+    );
+  }
+}
 
 /** 장소명이 없을 때 쓰는 표시명. 병합 시 "이름 미확보"를 정확히 판정하려고 상수화한다. */
 export const placeholderPlaceName = (contentId: number | string) =>
@@ -181,8 +277,25 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
  *
  * 기본은 카탈로그를 깔고 코스 쪽 값이 **있을 때만** 덮어쓴다(빈 문자열·0 = 정보 없음).
  * 분류(cat)는 카탈로그 기준 — 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
+ *
+ * `coords`(F5): 두 출처 모두 좌표가 없을 때만 얹는 장소명 기반 좌표. 실좌표(카탈로그)를
+ * 덮어쓰지 않는다 — 검색 결과보다 API 좌표가 언제나 정확하다.
  */
 export function mergePoi(
+  fromCourse: Poi | undefined,
+  fromCatalog: Poi | undefined,
+  coords?: LatLng,
+): Poi | undefined {
+  return withCoords(mergeSources(fromCourse, fromCatalog), coords);
+}
+
+/** 좌표가 비어 있을 때만 채운다. */
+function withCoords(poi: Poi | undefined, coords?: LatLng): Poi | undefined {
+  if (!poi || !coords || poi.lat != null) return poi;
+  return { ...poi, lat: coords.lat, lng: coords.lng };
+}
+
+function mergeSources(
   fromCourse: Poi | undefined,
   fromCatalog: Poi | undefined,
 ): Poi | undefined {
@@ -204,18 +317,22 @@ export function mergePoi(
 export const usePlannerStore = create<PlannerState>((set, get) => ({
   courseId: null,
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
+  transport: 'CAR',
+  transportOverride: null,
   course: { title: '', days: [] },
   apiPois: {},
   poiCatalog: {},
   baseSchedule: [],
   activeDay: 0,
   overrides: {},
+  placeTimes: {},
+  placeCoords: {},
   drawer: { open: false, poiId: null },
   dirty: false,
 
   resolvePoi: (id) => {
-    const { apiPois, poiCatalog } = get();
-    return mergePoi(apiPois[id], poiCatalog[id]);
+    const { apiPois, poiCatalog, placeCoords } = get();
+    return mergePoi(apiPois[id], poiCatalog[id], placeCoords[id]);
   },
 
   registerPois: (pois) =>
@@ -245,6 +362,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       courseId: res.courseId,
       apiPois,
       baseSchedule: res.schedule,
+      transport: ctx.transport,
+      transportOverride: null,
       course: { title: ctx.title, days },
       search: {
         dests: ctx.dests,
@@ -255,6 +374,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       },
       activeDay: 0,
       overrides: {},
+      placeTimes: {},
       drawer: { open: false, poiId: null },
       dirty: false,
     });
@@ -278,6 +398,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       courseId: detail.courseId,
       apiPois,
       baseSchedule: detail.schedule,
+      transport: detail.transport,
+      transportOverride: null,
       course: { title: detail.title, days },
       search: {
         // 상세 응답엔 sigunguCode/지역이 없다 → dests 비움(Planner 는 '경상북도'로 폴백).
@@ -289,6 +411,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       },
       activeDay: 0,
       overrides: {},
+      placeTimes: {},
       drawer: { open: false, poiId: null },
       dirty: false,
     });
@@ -381,6 +504,60 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       const next = { ...s.overrides };
       delete next[poiId];
       return { overrides: next, dirty: true };
+    }),
+
+  // 이동수단·교통비는 **dirty 를 세우지 않는다** — 서버에 보낼 자리가 없어서(계약 추적표 #6)
+  // '변경 저장'을 활성화하면 저장 후 '저장됨'으로 바뀌는데 정작 수단은 서버에 남지 않아
+  // 사용자를 속이게 된다. 저장 경로가 생기면 여기에 `dirty: true` 를 더하면 된다.
+  setTransport: (transport) =>
+    set((s) => (s.transport === transport ? {} : { transport })),
+
+  setTransportOverride: (val) =>
+    set((s) => {
+      const next = Number.isFinite(val) ? Math.max(0, Math.round(val)) : 0;
+      return s.transportOverride === next ? {} : { transportOverride: next };
+    }),
+
+  resetTransportOverride: () =>
+    set((s) => (s.transportOverride == null ? {} : { transportOverride: null })),
+
+  setPlaceTime: (poiId, time) => {
+    const s = get();
+    const next = normalizeTime(time);
+    const cur = s.placeTimes[poiId];
+    // 같은 값 재입력은 no-op — 편집하지 않은 코스를 dirty 로 만들지 않는다(editCost 와 같은 규약).
+    if ((cur?.time ?? undefined) === next) return;
+    set({ placeTimes: withTimeEdit(s.placeTimes, poiId, { time: next }), dirty: true });
+    if (next) warnIfTimesOutOfOrder(get(), poiId);
+  },
+
+  setPlaceDuration: (poiId, minutes) =>
+    set((s) => {
+      const next = Number.isFinite(minutes)
+        ? Math.max(0, Math.min(MAX_DURATION_MINUTES, Math.round(minutes)))
+        : undefined;
+      if ((s.placeTimes[poiId]?.durationMinutes ?? undefined) === next) return {};
+      return {
+        placeTimes: withTimeEdit(s.placeTimes, poiId, {
+          durationMinutes: next,
+        }),
+        dirty: true,
+      };
+    }),
+
+  setPlaceCoords: (poiId, coords) =>
+    set((s) =>
+      s.placeCoords[poiId]
+        ? {}
+        : { placeCoords: { ...s.placeCoords, [poiId]: coords } },
+    ),
+
+  resetPlaceTime: (poiId) =>
+    set((s) => {
+      if (s.placeTimes[poiId] == null) return {};
+      const placeTimes = { ...s.placeTimes };
+      delete placeTimes[poiId];
+      return { placeTimes, dirty: true };
     }),
 
   markPristine: () => set({ dirty: false }),

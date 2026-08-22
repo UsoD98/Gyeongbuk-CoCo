@@ -1,9 +1,11 @@
 # FE ↔ BE 계약 추적표 (S0-A)
 
 > 짝 문서: [`FE_개발순서.md`](./FE_개발순서.md) §Step0 0-A · [`FE_API_연동가이드.md`](./FE_API_연동가이드.md) §1-A
+> **백엔드에 넘길 요청서: [`BE_계약_요청서.md`](./BE_계약_요청서.md)** — 미해결 3건(#4→R1 · #8→R2 · #9→R3)을 근거·요청안·회신 양식으로 정리했다. 회신이 오면 이 표를 갱신한다.
 > 목적: 연동 착수 전 확정되지 않았던 계약을 추적한다.
 > **연동 중 400/422/빈결과가 나면 이 표부터 확인한다.**
-> 최종 업데이트: 2026-08-15 (P2 착수로 **GBC017 `GET /poi` 계약 실측 확정** — 응답 스키마·파라미터(단수 `sigunguCode`)·`theme` 미지원·`avgPrice` null·좌표 결측 주의 추가)
+> 최종 업데이트: 2026-08-22 (**미해결 3건을 요청서로 승격** — #4 `userId`·#8 코스 장소 좌표·#9 찜 상태 조회를 [`BE_계약_요청서.md`](./BE_계약_요청서.md) R1·R2·R3 으로 정리. 백엔드 `aa2a555`(0.5.12) 재실측으로 세 건 모두 **여전히 미해결** 확인. R2 는 `PoiSummary` 가 이미 `mapx`/`mapy` 를 들고 있어 **추가 조회 없이** 가능하다는 사실을 새로 확인했다. #6(`transport` 영속)은 요청서 부록 B 로 판단 요청.)
+> 이전 업데이트: 2026-08-15 (P2 착수로 **GBC017 `GET /poi` 계약 실측 확정** — 응답 스키마·파라미터(단수 `sigunguCode`)·`theme` 미지원·`avgPrice` null·좌표 결측 주의 추가)
 
 ---
 
@@ -17,7 +19,7 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 | 1 | `transport` | 대문자 enum `CAR`/`PUBLIC_TRANSPORT`/`WALK`. 요청 DTO가 `TransportType` enum이라 **정확 일치 필수** | `TransportType.java`, `TourCourseGenerateRequestDto.java:33` | ☑ 확정 |
 | 2 | `sigunguCodes` | **복수** `string[]`, 선택. **법정동 시군구 코드 3자리 bare**(예 경주 `130`, 접두 `47` 없음) — 서비스가 `findByLDongSignguCdIn`으로 조회. FE `sigunguStore.value`·`mst_sigungu`와 동일 | `TourCourseGenerateRequestDto.java:38`, `TourCourseServiceImpl.java:412~417`, 라이브 실측(200/400) | ☑ 확정 |
 | 3 | `theme` | `string[]`(≥1). **한국어 라벨 필수** — 값이 LLM 프롬프트에 그대로 삽입됨(코드/목id 금지) | `TourCourseGenerateRequestDto.java:35`, `TourCourseServiceImpl.java:371~379` | ◐ 타입확정/값주의 |
-| 4 | `userId` | **백엔드 미제공** — 로그인/재발급/카카오 응답은 `{accessToken}`뿐. JWT subject=email, `/user/me` 없음 | `LoginResponseDto.java`, `AuthController.java:43,72,84`, `JwtProvider.java:59~65` | ⛔ 블로커 |
+| 4 | `userId` | **백엔드 미제공** — 로그인/재발급/카카오 응답은 `{accessToken}`뿐. JWT subject=email, `/user/me` 없음. **`aa2a555`(0.5.12) 재실측에서도 동일** → [요청서 R1](./BE_계약_요청서.md#r1-로그인-사용자-userid-획득-경로-추적표-4) | `LoginResponseDto.java`, `AuthController.java:37,63,78`, `JwtProvider.java:59~65`, `UserController.java:22,28,34,43,52` | ⛔ 블로커 · 📤 요청 |
 
 > 배지: `☑` 확정 · `◐` 타입은 확정·값 의미론 주의 · `⛔` 계약 불일치(블로킹)
 
@@ -49,6 +51,7 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - **영향 범위**: 코스 파이프라인(S1~S7)·POI 좋아요(P1)는 userId 불필요(백엔드가 email로 처리) → 정상 진행.
 - **필요 결정(백엔드 중 택1)**: ① `LoginResponseDto`+재발급에 `userId` 추가, ② `GET /user/me`(토큰 기반) 추가, ③ JWT에 userId 클레임 추가(FE 디코드).
 - **FE 준비 상태**: S0-C(`authStore.userId`+`setAuth`+localStorage, `LoginResponse.userId?`)는 ①이 되면 **코드 수정 없이 즉시 동작**. 현재는 항상 null(무해).
+- **📤 요청 발송(2026-08-22)**: [`BE_계약_요청서.md` R1](./BE_계약_요청서.md#r1-로그인-사용자-userid-획득-경로-추적표-4)로 정리(권장안 ①). 백엔드 `aa2a555`(0.5.12) 재실측 결과 **변화 없음** — 세 인증 경로 모두 `LoginResponseDto{accessToken}` 단일 필드, `UserController`는 여전히 `/{userId}` 경로변수만. (라인 참조를 현재 소스 기준 `AuthController.java:37/63/78`로 정정했다.)
 
 ---
 
@@ -74,13 +77,36 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
   - ⚠️ 검증 규칙(`validateUpdateRequest` 실측): ①`schedule` 비어 있으면 400 ②**Day 마다 장소 1곳 이상**(`@NotEmpty` → 400 "일정에 최소 한 개의 장소가 필요합니다") ③`date` 는 코스 `startDate~endDate` 범위 안 ④`type` 은 유효한 `PlaceType` ⑤`contentId` 는 백엔드 후보 목록(`tourLiveDataService.getAllCandidates`)에 있어야 한다. FE는 ②를 보내기 전에 막고 어느 Day 인지 toast 로 알린다(`useCourseUpdate`).
   - ⚠️ **인증 없이 호출하면 401 이 아니라 500** 이 온다(실측). 매핑 존재 여부를 상태코드로 추정하지 말 것.
   - ⚠️ FE 조립 규칙(`utils/coursePayload`): UI 코스에 없는 원본 필드는 `plannerStore.baseSchedule`(응답 원본)에서 복원하고, 새로 담은 장소는 카탈로그 Poi 로 채운다. 방문 시각은 **그 날 원본 시각 슬롯을 순번대로 배분**(재정렬해도 시각이 역전되지 않음). 예산 override(총액)는 `cost`(1인 기준)로 환산해 보낸다(백엔드가 무시하더라도 계약대로 전송).
-- ⏸ `GET /poi/{contentId}` 미구현 → **P3 대기**.
+- ✅ **`GET /poi/{contentId}`(GBC018) 구현 확인(백엔드 소스 실측 2026-08-22)** — P3 착수·완료. `PoiController.getPoiDetail` + `PoiDetailServiceImpl`(TourAPI `detailCommon` + `detailInfo` 라이브 조회). 인증 불필요(`/api/v1/poi/**` permitAll).
+  - 응답 = `{contentId, contentTypeId, title, tel, homepage, overview, firstimage, firstimage2, addr1, addr2, mapx, mapy, avgPrice, infoList[{infoname, infotext}]}`(`PoiDetailResponseDto`). `title` 은 없으면 `'(제목없음)'` 으로 채워 **항상 문자열**, 나머지 문자열·좌표는 nullable, `infoList` 는 없으면 **빈 배열**(`List.of()`).
+  - ⚠️ **목록(GBC017)과 필드명이 다르다** — 썸네일이 `thumbnail` 이 아니라 `firstimage`/`firstimage2`. 좌표 키(`mapx`=경도·`mapy`=위도)는 동일.
+  - ✅ **HTML 은 백엔드가 제거해서 준다**(`stripHtml`: `<br>`→줄바꿈 후 태그 제거) → `overview`·`homepage`·`infotext` 는 그대로 텍스트로 렌더한다(`dangerouslySetInnerHTML` 불필요). 줄바꿈이 살아 있어 `whitespace-pre-line` 필요.
+  - ⚠️ **`avgPrice` 는 항상 null**(서비스가 명시적으로 `null` 고정, TODO BOQ14) → 목록과 같은 제약. 가격은 사용자 입력(override)만 의미가 있다.
+  - ⚠️ **좌표 `0`** 항목이 섞여 있다(목록과 동일) → `utils/coords.isValidTourCoord` 로 걸러 쓴다.
+  - ⚠️ **찜 상태(`liked`)는 상세 응답에도 없다** → #9 그대로 유효.
+  - ⚠️ 없는 contentId 는 **404** + `{code:404, msg:'존재하지 않는 POI입니다'}`(`GlobalExceptionHandler`). TourAPI 라이브 조회라 응답이 느릴 수 있고 동시 호출 시 503 가능(목록과 동일) → FE 는 contentId 단위 캐시 + in-flight dedup.
+  - `infoList` 는 유형마다 항목이 다르다(관광지=이용시간·주차, 음식점=대표메뉴·영업시간 …) → FE 는 이름에 '시간' 이 든 항목을 운영시간 폴백으로 쓰고 나머지는 부가정보 목록으로 표시.
 - ✅ **`GET /poi`(GBC017) 구현 확인(백엔드 v0.5.1, 2026-08-15)** — P2 완료. 응답 `{available, items[{contentId, contentTypeId, title, mapx, mapy, thumbnail, avgPrice}]}`(`PoiCurationResponseDto`/`PoiCurationItemDto`). 파라미터는 `sigunguCode`(단수·필수)·`peopleCount`(필수, **검증만 하고 필터엔 미사용**)·`contentTypeId`(선택). 인증 불필요(`SecurityConfig` permitAll).
   - ⚠️ **`theme` 파라미터 없음** — 가이드 §3의 `theme` 필터는 백엔드에 존재하지 않는다(테마 기반 큐레이션 불가). 필요하면 백엔드 추가 요청 대상.
   - ⚠️ **`avgPrice` 항상 null** — 근거 테이블 소실(백엔드 TODO `BOQ14`). FE는 가격 0을 '무료'가 아닌 **'가격 미정'**으로 표기한다. 예산 계산에서 POI 비용은 사용자가 직접 입력(override)해야 의미가 있다.
   - ⚠️ **`contentTypeId` 8종** — 12/14/15/25/28/32/38/39가 모두 응답에 등장(경주 실측). FE `PoiCat` 4종으로 접어서 사용(`catOfContentType`).
   - ⚠️ **좌표 결측치** — `mapx/mapy = 0`인 항목이 섞여 있다(경주 324건 중 1건). 좌표 사용 시 범위 검사 필수.
   - ⚠️ **동시 호출 시 503** — TourAPI 라이브 조회라 동일/다중 요청이 겹치면 503이 나올 수 있다(실측). FE는 in-flight dedup으로 완화.
+
+## 추가 확인 요청 (그룹 F, 2026-08-22)
+
+| # | 항목 | 질문 | FE 현재 처리 | 상태 |
+|---|------|------|--------------|:---:|
+| 5 | `durationMinutes`·`cost` 영속 (F1·S8) | GBC020 으로 보낸 `schedule[].places[].durationMinutes`·`cost` 를 **저장하는가**? | **☑ 저장한다**(백엔드 소스 실측, 2026-08-22). `TourCourseUpdateRequestDto.PlaceUpdate` 에 `durationMinutes`·`cost` 가 있고 `TourCourseServiceImpl.updateCourse` 가 `TourCourseUserDefinedDetail` 로 그대로 저장한다. 조회도 반영 — `resolveCost(type, detail, storedCost)` 가 **저장값을 최우선**으로 쓰고 `durationMinutes` 는 엔티티 값을 그대로 내려준다(백엔드 0.5.9·0.5.10 에서 `cost` 컬럼 신설). ⚠️ 무시되는 건 `contentName`·`thumbnailImg`·`operatingHours`(TourAPI 라이브 재조립) 뿐이다 → **보드 S8 의 "비용은 서버가 저장하지 않는다" 메모는 그 시점 기준이고 지금은 저장된다.** 라이브 왕복 재확인은 백엔드 기동 시 | ☑ 확정(소스) |
+| 6 | `transport`·교통비 영속 (F2) | 코스 헤더의 `transport` 를 수정할 경로가 있는가? 교통비를 저장할 필드가 있는가? | **⛔ 둘 다 없다(백엔드 소스 실측, 2026-08-22).** ①`transport` 는 생성(GBC010) 시 `TourCourseUserDefined.transport` 에 1회 저장되고 이후 수정 경로가 없다 — `TourCourseController` 의 PATCH 는 `/{id}`(schedule)·`/{id}/title`·`/{id}/assign` 셋뿐이고 `TourCourseUpdateRequestDto` 에도 `transport` 필드가 없다. ②교통비는 **설계상 서버가 산정·저장하지 않는다**(백엔드 0.5.9 에서 BU3 교통비 추정 취소, "이동 관련 비용 계산은 프론트엔드가 전담"). 저장되는 비용은 장소별 `cost` 뿐. → FE 는 `plannerStore.transport`·`transportOverride` 로 세션 내 계산·표시만 하고 `dirty` 를 세우지 않는다(저장 버튼이 거짓말하지 않게). **영속이 필요하면 백엔드에 ①`transport` 수정 경로 ②코스 단위 교통비 필드를 요청해야 한다** → [요청서 부록 B](./BE_계약_요청서.md#부록-b-우선순위-낮은-후보-판단만-부탁--지금-요청은-아님)로 **판단 요청**(추가할지 현행 유지할지) | ⛔ 불가 확정 · 📤 판단 대기 |
+| 7 | 내 찜 목록 조회 (F4) | 로그인 사용자의 POI 좋아요 목록을 주는 엔드포인트가 있는가? 같은 POI 두 번 호출 시 `liked:false` 로 내려오는가(insert-only 여부) | **원인 확정(백엔드 소스 실측 2026-08-22).** ①**insert-only 아님** — `PoiLikeServiceImpl.toggleLike` 는 `findByUserIdAndContentId` 로 기존 행을 찾아 있으면 `delete`+`decrementLikes`(0 하한) 후 `liked:false`, 없으면 `saveAndFlush`+`incrementLikes` 후 `liked:true` 를 준다. 컨트롤러 메시지도 "좋아요가 취소되었습니다."로 갈린다. ②사용자 증상("추가만 됨")의 실제 원인은 **백엔드 저장 유실 버그**였고 `6e4e682`(2026-08-16, "벌크 업데이트 `clearAutomatically` 로 INSERT 유실")로 **수정 완료**(현재 소스에 `saveAndFlush`+`flush()` 반영). ③**남은 계약 공백 = 찜 상태 조회 경로 없음** — `PoiController` 는 `/poi`·`/poi/{contentId}`·`/poi/{contentId}/like` 3개뿐이고 `PoiCurationItemDto`·`PoiDetailResponseDto` 에 `liked`/`likes` 필드가 없다(`UserPoiLikeRepository.existsByUserIdAndContentId` 는 존재하나 **아무 컨트롤러도 쓰지 않음**) → 새로고침하면 서버에 남은 찜도 하트가 비어 보이고, 그 상태에서 누르면 실제로는 **해제**된다. FE 는 `localStorage` 흉내내기를 채택하지 않고(서버 진실과 어긋남) 응답 `liked` 가 기대와 다를 때 toast 로 알린다. → **#9 로 백엔드 요청 승격** | ☑ 확정(소스) |
+
+| # | 항목 | 질문 | FE 현재 처리 | 상태 |
+|---|------|------|--------------|:---:|
+| 8 | 코스 장소 좌표 (F5) | 코스 조회/생성 응답의 `schedule[].places[]` 에 **`mapx`/`mapy`(좌표)를 넣어 줄 수 있는가**? 지금은 좌표가 없어, 큐레이션 목록(GBC017)을 부르지 않은 지역의 코스는 지도에 찍을 좌표가 0개다(컬렉션에서 코스만 열면 그렇다). **실측(2026-08-22): 백엔드는 추가 조회 없이 줄 수 있다** — `service/PoiSummary.java` 가 이미 `mapx`/`mapy` 를 들고 있고 `TourCourseServiceImpl:269~279`(생성)·`:315~325`(상세)가 바로 그 `summaryMap` 으로 `placeName`·`thumbnailImg` 를 채운다 → `thumbnailOf`(`:374~378`)와 같은 헬퍼 1개 + DTO 2필드면 끝. `TourCourseShareResponseDto.PlaceInfo` 는 9필드로 좌표만 빠져 있다 | 장소명으로 카카오 로컬 키워드 검색을 돌려 좌표를 메운다(`utils/kakaoGeocode`). 실패 시 좌표 없음으로 남긴다 — 백엔드가 좌표를 주면 이 폴백은 필요 없다 | 📤 [요청 R2](./BE_계약_요청서.md#r2-코스-장소에-좌표mapxmapy-추가-추적표-8) |
+| 9 | 찜 상태 조회 API (F4) | 로그인 사용자의 찜 상태를 **읽을** 경로를 주실 수 있는가? (선택지: ㉮ `GET /poi/likes` → 내가 찜한 `contentId[]`, ㉯ `GET /poi`·`GET /poi/{contentId}` 응답에 `liked`(+`likes`) 필드 추가 — 인증 있을 때만 채움) | `poiLikeStore` 는 **메모리 전용**이라 새로고침 시 항상 미찜으로 시작한다. 서버 진실과 어긋나는 localStorage 캐시는 쓰지 않고, 토글 응답이 기대와 다르면 "이미 찜한 곳이어서 찜을 해제했어요"로 알린다. 조회 경로가 생기면 `poiLikeStore` 초기 주입만 추가하면 된다(구조 변경 불필요) | 📤 [요청 R3](./BE_계약_요청서.md#r3-내-찜poi-좋아요-상태-조회-경로-추적표-9) |
+
+---
 
 ## 구현 메모
 - `CourseScheduleDay` 명명: 목업 `CourseDay`(`@/types/planner.ts`)와 충돌 회피(변경 없음).

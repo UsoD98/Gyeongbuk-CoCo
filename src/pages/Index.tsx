@@ -234,6 +234,7 @@ export default function Index() {
         end,
         pax: number,
         themes: selectedThemes,
+        transport,
       });
       navigate('/planner/');
     } catch (error) {

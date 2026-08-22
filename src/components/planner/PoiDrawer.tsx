@@ -3,7 +3,10 @@ import {
   ArrowRight,
   Check,
   Clock,
+  Globe,
   Map as MapIcon,
+  MapPin,
+  Phone,
   Plus,
   Users,
   Wallet,
@@ -11,10 +14,12 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import Skeleton from '@/components/common/Skeleton.tsx';
 import CatBadge from '@/components/planner/parts/CatBadge.tsx';
 import ImgPlaceholder from '@/components/planner/parts/ImgPlaceholder.tsx';
 import LikeButton from '@/components/planner/LikeButton.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
+import { getApiErrorMessage } from '@/api/types.ts';
 import { usePoi } from '@/hooks/usePoi.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { kakaoMapPlaceUrl } from '@/utils/kakaoMap.ts';
@@ -31,9 +36,10 @@ export default function PoiDrawer() {
   const activeDay = usePlannerStore((s) => s.activeDay);
   const closeDrawer = usePlannerStore((s) => s.closeDrawer);
   const addPoi = usePlannerStore((s) => s.addPoi);
-  // POI 데이터 소스는 usePoi 훅으로 캡슐화(P0). 현재는 스토어/목, P3(GBC018)에서 실상세로 교체.
-  // 훅은 조건부 호출 불가 → 최상단에서 호출(poiId 없으면 undefined).
-  const poi = usePoi(drawer.poiId);
+  // POI 데이터 소스는 usePoi 훅으로 캡슐화(P0). P3(GBC018)에서 실상세 조회로 교체 —
+  // 목록/코스로 이미 아는 값은 즉시 그리고 상세(소개·연락처·부가정보)는 도착하는 대로 채운다.
+  // 훅은 조건부 호출 불가 → 최상단에서 호출(poiId 없으면 조회하지 않는다).
+  const { poi, detail, loading, error, reload } = usePoi(drawer.poiId);
 
   useEffect(() => {
     if (!drawer.open) return;
@@ -65,6 +71,26 @@ export default function PoiDrawer() {
       poi.buckets.map((b) => (b === '3-4' ? '3~4인' : `${b}인`)).join(', '),
     ],
   ];
+
+  // 상세(GBC018)로만 오는 값들. 없으면 행 자체를 만들지 않는다(빈 값 나열 방지).
+  const address = [detail?.addr1, detail?.addr2]
+    .map((v) => v?.trim())
+    .filter(Boolean)
+    .join(' ');
+  const tel = detail?.tel?.trim();
+  const homepage = detail?.homepage?.trim();
+  // 백엔드가 HTML 을 제거해 주므로 홈페이지는 URL 텍스트로 온다(여러 개면 첫 번째만 링크).
+  // 프로토콜 없는 표기(`www.…`)나 안내문이 섞여 오면 링크 대신 텍스트로 보여준다.
+  const homepageUrl = homepage?.match(/https?:\/\/\S+/)?.[0];
+  const overview = detail?.overview?.trim();
+  // 부가정보는 이름·내용이 모두 있는 행만 쓴다(백엔드가 한쪽만 있는 행도 담는다).
+  // 위 정보 카드의 '운영시간' 으로 이미 쓴 항목은 같은 값을 두 번 보여주지 않도록 제외한다.
+  const extras = (detail?.infoList ?? []).filter(
+    (i) =>
+      i.infoname?.trim() &&
+      i.infotext?.trim() &&
+      i.infotext.trim() !== poi.hours,
+  );
 
   return (
     <>
@@ -125,7 +151,43 @@ export default function PoiDrawer() {
             </div>
           </div>
 
-          <p className="text-sm leading-relaxed text-base-content/70">{poi.desc}</p>
+          {/* 소개 — 상세(GBC018)가 오면 overview, 아직/없으면 기존 한 줄(지역명 등)로 폴백. */}
+          {loading && !overview ? (
+            <div className="flex flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-2/3" />
+            </div>
+          ) : overview ? (
+            <p className="whitespace-pre-line text-sm leading-relaxed text-base-content/70">
+              {overview}
+            </p>
+          ) : (
+            poi.desc && (
+              <p className="text-sm leading-relaxed text-base-content/70">
+                {poi.desc}
+              </p>
+            )
+          )}
+
+          {/* 상세 조회 실패 — 이미 보이는 정보는 유지하고 재시도만 제공한다. */}
+          {!!error && !detail && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-error/30 bg-error/5 px-3.5 py-3"
+            >
+              <span className="text-sm text-base-content/70">
+                {getApiErrorMessage(error, '상세 정보를 불러오지 못했어요')}
+              </span>
+              <button
+                type="button"
+                className="btn btn-xs btn-outline"
+                onClick={reload}
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2.5 rounded-2xl border border-base-200 p-3.5">
             {info.map(([Icon, k, v]) => (
@@ -141,6 +203,73 @@ export default function PoiDrawer() {
               </div>
             ))}
           </div>
+
+          {(address || tel || homepage) && (
+            <div className="flex flex-col gap-2.5 rounded-2xl border border-base-200 p-3.5">
+              {address && (
+                <div className="flex items-start gap-2">
+                  <MapPin
+                    size={15}
+                    aria-hidden="true"
+                    className="mt-0.5 shrink-0 text-base-content/60"
+                  />
+                  <span className="text-sm">{address}</span>
+                </div>
+              )}
+              {tel && (
+                <div className="flex items-start gap-2">
+                  <Phone
+                    size={15}
+                    aria-hidden="true"
+                    className="mt-0.5 shrink-0 text-base-content/60"
+                  />
+                  <a href={`tel:${tel.replace(/[^\d+]/g, '')}`} className="text-sm link link-hover">
+                    {tel}
+                  </a>
+                </div>
+              )}
+              {homepage && (
+                <div className="flex items-start gap-2">
+                  <Globe
+                    size={15}
+                    aria-hidden="true"
+                    className="mt-0.5 shrink-0 text-base-content/60"
+                  />
+                  {homepageUrl ? (
+                    <a
+                      href={homepageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="link link-hover break-all text-sm"
+                    >
+                      {homepageUrl}
+                    </a>
+                  ) : (
+                    <span className="break-all text-sm">{homepage}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 부가정보(TourAPI detailInfo) — 유형마다 항목이 다르다(이용시간·주차·대표메뉴 …). */}
+          {extras.length > 0 && (
+            <dl className="flex flex-col gap-2.5 rounded-2xl border border-base-200 p-3.5">
+              {extras.map((item, i) => (
+                <div
+                  key={`${item.infoname}-${i}`}
+                  className="flex flex-col gap-0.5"
+                >
+                  <dt className="text-xs font-bold text-base-content/60">
+                    {item.infoname}
+                  </dt>
+                  <dd className="whitespace-pre-line text-sm leading-relaxed">
+                    {item.infotext}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
           {/* 좌표가 있으면 해당 지점, 없으면 이름 검색으로 카카오맵을 새 탭에 연다. */}
           <a

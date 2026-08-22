@@ -3,7 +3,8 @@
  *
  * - GBC017(목록): 백엔드 v0.5.1에서 구현됨. 아래 타입은 `PoiCurationResponseDto`/
  *   `PoiCurationItemDto` 실측 1:1(P2에서 잠정안 교체).
- * - GBC018(상세)은 여전히 미구현(`GET /poi/{contentId}` 없음) → `PoiDetail`은 잠정 유지, P3에서 교정.
+ * - GBC018(상세): 백엔드 구현 확인(2026-08-22, `PoiController.getPoiDetail` + `PoiDetailServiceImpl`)
+ *   → `PoiDetail`을 `PoiDetailResponseDto` 실측 1:1로 교체(P3에서 잠정안 폐기).
  *   docs/FE_계약_추적표.md 참조.
  */
 
@@ -88,12 +89,52 @@ export interface PoiListResponse {
   items: PoiSummary[];
 }
 
-/** POI 상세 통합 (GBC018) — ⚠️ 잠정: 백엔드 미구현(P3 대기). */
-export interface PoiDetail extends PoiSummary {
-  tel?: string;
-  /** 소개(overview) */
-  overview?: string;
-  homepage?: string;
+/**
+ * POI 부가정보 한 줄 (GBC018 `infoList`) — TourAPI `detailInfo` 의 이름/내용 쌍.
+ * contentTypeId 마다 항목이 다르다(관광지=이용시간·주차·문의, 음식점=대표메뉴·영업시간 …).
+ * 백엔드가 `infoname`/`infotext` 중 **하나만 있는 행도 담는다** → 각각 null 가능.
+ */
+export interface PoiInfoItem {
+  infoname: string | null;
+  infotext: string | null;
+}
+
+/**
+ * POI 상세 통합 (GBC018 GET /poi/{contentId}) — 백엔드 `PoiDetailResponseDto` 실측 1:1.
+ * 인증 불필요(`SecurityConfig` 의 `/api/v1/poi/**` permitAll).
+ *
+ * ⚠️ 목록(`PoiSummary`)과 필드명이 다르다 — 썸네일이 `thumbnail` 이 아니라 `firstimage`(대표)·
+ *    `firstimage2`(보조)이고 좌표는 목록과 같은 `mapx`(경도)/`mapy`(위도)다.
+ * ⚠️ `overview`·`homepage`·`infotext` 는 **백엔드가 HTML 을 이미 제거**해서 준다
+ *    (`stripHtml`: `<br>` → 줄바꿈, 나머지 태그 제거) → FE 는 그대로 텍스트로 렌더한다.
+ *    줄바꿈이 살아 있으므로 `whitespace-pre-line` 이 필요하다.
+ * ⚠️ `avgPrice` 는 **항상 null**(백엔드가 명시적으로 null 고정, TODO BOQ14) → 목록과 동일.
+ * ⚠️ 없는 contentId 는 404 + `{code:404, msg:'존재하지 않는 POI입니다'}`(공통 봉투).
+ */
+export interface PoiDetail {
+  contentId: number;
+  contentTypeId: number | null;
+  /** 제목. 백엔드가 없을 때 '(제목없음)' 으로 채워 항상 문자열이다. */
+  title: string;
+  tel: string | null;
+  homepage: string | null;
+  /** 소개글. 여러 줄일 수 있다(백엔드가 `<br>` 을 `
+` 으로 바꿔 준다). */
+  overview: string | null;
+  /** 대표 이미지 URL(TourAPI `firstimage`). */
+  firstimage: string | null;
+  /** 보조 이미지 URL(TourAPI `firstimage2`). */
+  firstimage2: string | null;
+  addr1: string | null;
+  addr2: string | null;
+  /** TourAPI mapx = 경도(lng). */
+  mapx: number | null;
+  /** TourAPI mapy = 위도(lat). */
+  mapy: number | null;
+  /** ⚠️ 항상 null(BOQ14). */
+  avgPrice: number | null;
+  /** 부가정보 쌍. 없으면 빈 배열(백엔드가 `List.of()` 로 보장). */
+  infoList: PoiInfoItem[];
 }
 
 /**
@@ -116,6 +157,17 @@ export async function getPois(params: PoiListParams): Promise<PoiListResponse> {
   const { data } = await apiClient.get<ApiResponse<PoiListResponse>>('/poi', {
     params,
   });
+  return data.data;
+}
+
+/**
+ * GET /poi/{contentId} — POI 상세 통합 (GBC018). 인증 불필요(`SecurityConfig` permitAll).
+ * TourAPI 라이브 조회라 응답이 느릴 수 있고, 없는 contentId 는 404 다.
+ */
+export async function getPoi(contentId: number): Promise<PoiDetail> {
+  const { data } = await apiClient.get<ApiResponse<PoiDetail>>(
+    `/poi/${contentId}`,
+  );
   return data.data;
 }
 
