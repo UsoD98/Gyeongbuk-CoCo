@@ -82,6 +82,16 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
   - ⚠️ **좌표 결측치** — `mapx/mapy = 0`인 항목이 섞여 있다(경주 324건 중 1건). 좌표 사용 시 범위 검사 필수.
   - ⚠️ **동시 호출 시 503** — TourAPI 라이브 조회라 동일/다중 요청이 겹치면 503이 나올 수 있다(실측). FE는 in-flight dedup으로 완화.
 
+## 추가 확인 요청 (그룹 F, 2026-08-22)
+
+| # | 항목 | 질문 | FE 현재 처리 | 상태 |
+|---|------|------|--------------|:---:|
+| 5 | `durationMinutes` 영속 (F1) | GBC020 `PATCH /tour-course/{courseId}` 로 보낸 `schedule[].places[].durationMinutes` 를 **저장하는가**? 조회 응답은 현재 항상 `null` 이다(실측). `cost`·`contentName`·`thumbnailImg`·`operatingHours` 처럼 표시 전용으로 무시되면 사용자가 고친 체류시간이 재진입 시 사라진다 | 사용자 지정값을 `plannerStore.placeTimes` 에 보관하고 저장 페이로드에 실어 보낸다. 무시되더라도 화면은 세션 내 지정값을 유지 | ◐ 확인 대기 |
+| 6 | `transport`·교통비 영속 (F2) | 코스 헤더의 `transport` 를 수정할 경로가 있는가? GBC020 바디는 `{schedule}` 뿐이라 이동수단·교통비를 실을 자리가 없다(전용 엔드포인트 또는 바디 확장 필요) | F2 착수 시 확인. 불가하면 FE 로컬 계산·표시까지만 반영 | ☐ 미확인 |
+| 7 | 내 찜 목록 조회 (F4) | 로그인 사용자의 POI 좋아요 목록을 주는 엔드포인트가 있는가? `openapi.yaml` 에는 `/poi`, `/poi/{contentId}`, `/poi/{contentId}/like` 뿐이라 새로고침 후 찜 상태를 복원할 수 없다. 또한 같은 POI 에 두 번 호출하면 `liked:false` 로 내려오는가(insert-only 여부) | `poiLikeStore` 는 메모리 전용 — 서버 진실이 없어 복원하지 않는다 | ☐ 미확인 |
+
+---
+
 ## 구현 메모
 - `CourseScheduleDay` 명명: 목업 `CourseDay`(`@/types/planner.ts`)와 충돌 회피(변경 없음).
 - `ContentTypeId`: FE는 `PoiCat`(4종) 대응값 12/14/32/39만 정의. 백엔드 `PlaceType`엔 15(축제)/28(레포츠)/38(쇼핑)도 있음 — POI 목록/상세(P2/P3) 확장 시 반영.

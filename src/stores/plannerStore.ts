@@ -9,7 +9,13 @@ import type {
 import { CATEGORIES } from '@/mocks/planner.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { httpsUrl } from '@/utils/format.ts';
-import type { Course, CourseDay, Poi, PoiCat } from '@/types/planner.ts';
+import type {
+  Course,
+  CourseDay,
+  PlaceTimeEdit,
+  Poi,
+  PoiCat,
+} from '@/types/planner.ts';
 
 /**
  * 플래너 단일 도메인 스토어.
@@ -78,6 +84,12 @@ interface PlannerState {
   activeDay: number;
   /** poiId → 사용자가 수정한 금액 */
   overrides: Record<string, number>;
+  /**
+   * poiId → 사용자가 지정한 방문 시각·체류시간 (F1). 지정하지 않은 장소는 키가 없고,
+   * 그 경우 서버 원본(`baseSchedule`)의 시각·체류시간과 타입 기본값을 그대로 쓴다.
+   * ⚠️ key 가 poiId 라 같은 장소를 여러 Day 에 담으면 시간도 공유된다(`overrides` 와 같은 규약).
+   */
+  placeTimes: Record<string, PlaceTimeEdit>;
   drawer: Drawer;
   /**
    * 서버에 아직 반영하지 않은 편집(추가·제거·재정렬·비용)이 있는지 (GBC020).
@@ -111,6 +123,12 @@ interface PlannerState {
   reorder: (dayIdx: number, from: number, to: number) => void;
   editCost: (poiId: string, val: number) => void;
   resetCost: (poiId: string) => void;
+  /** 방문 시각 지정 'HH:mm'(빈 값·형식 불일치는 지정 해제). 순서와 어긋나면 toast 로 알린다. */
+  setPlaceTime: (poiId: string, time: string) => void;
+  /** 체류시간(분) 지정. 숫자가 아니면 지정 해제. */
+  setPlaceDuration: (poiId: string, minutes: number) => void;
+  /** 시각·체류시간 지정 해제(서버 원본 값으로 되돌림). */
+  resetPlaceTime: (poiId: string) => void;
   /** 편집 내용을 서버에 반영 완료로 표시(GBC020 성공 시 `useCourseUpdate` 가 호출). */
   markPristine: () => void;
   openDrawer: (poiId: string) => void;
@@ -127,6 +145,53 @@ const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
   ACCOMMODATION: 'stay',
   FOOD: 'food',
 };
+
+/** 체류시간 상한(분). 하루를 넘기는 입력은 잘라 낸다. */
+const MAX_DURATION_MINUTES = 24 * 60;
+
+/** 'HH:mm' 만 통과시킨다. 빈 값·형식 불일치는 "지정 해제"(undefined)로 본다. */
+const normalizeTime = (value: string): string | undefined =>
+  /^\d{2}:\d{2}$/.test(value) ? value : undefined;
+
+/**
+ * 시간 지정 맵에 한 장소의 편집분을 병합한다(F1).
+ * 시각·체류시간이 모두 미지정으로 돌아가면 **키를 지운다** — "지정된 장소만 담는다"는
+ * 불변식을 지켜 `placeTimes` 가 빈 껍데기 항목으로 불어나지 않게 한다.
+ */
+function withTimeEdit(
+  placeTimes: Record<string, PlaceTimeEdit>,
+  poiId: string,
+  patch: PlaceTimeEdit,
+): Record<string, PlaceTimeEdit> {
+  const next = { ...placeTimes };
+  const merged: PlaceTimeEdit = { ...next[poiId], ...patch };
+  if (merged.time == null && merged.durationMinutes == null) delete next[poiId];
+  else next[poiId] = merged;
+  return next;
+}
+
+/** poiId 의 실효 방문 시각('HH:mm') — 사용자 지정값 우선, 없으면 서버 원본. 없으면 빈 문자열. */
+const effectiveTime = (state: PlannerState, poiId: string): string =>
+  state.placeTimes[poiId]?.time ?? state.resolvePoi(poiId)?.visitTime ?? '';
+
+/**
+ * 방문 시각이 코스 순서와 어긋났으면 알린다(F1).
+ * **자동 정렬은 하지 않는다** — 사용자가 의도한 코스 순서를 시각 때문에 덮어쓰지 않기 위해서다.
+ * 시각을 모르는 장소는 저장 시 슬롯이 배분되므로 비교에서 제외한다.
+ */
+function warnIfTimesOutOfOrder(state: PlannerState, poiId: string) {
+  const day = state.course.days.find((d) => d.items.includes(poiId));
+  if (!day) return;
+  const times = day.items
+    .map((id) => effectiveTime(state, id))
+    .filter((t) => t !== '');
+  const outOfOrder = times.some((t, i) => i > 0 && t < times[i - 1]);
+  if (outOfOrder) {
+    toast.info(
+      `${day.label} 방문 시각 순서가 어긋났어요 — 코스 순서는 그대로 저장돼요`,
+    );
+  }
+}
 
 /** 장소명이 없을 때 쓰는 표시명. 병합 시 "이름 미확보"를 정확히 판정하려고 상수화한다. */
 export const placeholderPlaceName = (contentId: number | string) =>
@@ -210,6 +275,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   baseSchedule: [],
   activeDay: 0,
   overrides: {},
+  placeTimes: {},
   drawer: { open: false, poiId: null },
   dirty: false,
 
@@ -255,6 +321,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       },
       activeDay: 0,
       overrides: {},
+      placeTimes: {},
       drawer: { open: false, poiId: null },
       dirty: false,
     });
@@ -289,6 +356,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       },
       activeDay: 0,
       overrides: {},
+      placeTimes: {},
       drawer: { open: false, poiId: null },
       dirty: false,
     });
@@ -381,6 +449,38 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       const next = { ...s.overrides };
       delete next[poiId];
       return { overrides: next, dirty: true };
+    }),
+
+  setPlaceTime: (poiId, time) => {
+    const s = get();
+    const next = normalizeTime(time);
+    const cur = s.placeTimes[poiId];
+    // 같은 값 재입력은 no-op — 편집하지 않은 코스를 dirty 로 만들지 않는다(editCost 와 같은 규약).
+    if ((cur?.time ?? undefined) === next) return;
+    set({ placeTimes: withTimeEdit(s.placeTimes, poiId, { time: next }), dirty: true });
+    if (next) warnIfTimesOutOfOrder(get(), poiId);
+  },
+
+  setPlaceDuration: (poiId, minutes) =>
+    set((s) => {
+      const next = Number.isFinite(minutes)
+        ? Math.max(0, Math.min(MAX_DURATION_MINUTES, Math.round(minutes)))
+        : undefined;
+      if ((s.placeTimes[poiId]?.durationMinutes ?? undefined) === next) return {};
+      return {
+        placeTimes: withTimeEdit(s.placeTimes, poiId, {
+          durationMinutes: next,
+        }),
+        dirty: true,
+      };
+    }),
+
+  resetPlaceTime: (poiId) =>
+    set((s) => {
+      if (s.placeTimes[poiId] == null) return {};
+      const placeTimes = { ...s.placeTimes };
+      delete placeTimes[poiId];
+      return { placeTimes, dirty: true };
     }),
 
   markPristine: () => set({ dirty: false }),

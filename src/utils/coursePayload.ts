@@ -13,7 +13,12 @@
 
 import type { CoursePlace, CourseScheduleDay } from '@/api/tourCourse.ts';
 import { placeholderPlaceName } from '@/stores/plannerStore.ts';
-import type { Course, Poi, PoiCat } from '@/types/planner.ts';
+import type {
+  Course,
+  PlaceTimeEdit,
+  Poi,
+  PoiCat,
+} from '@/types/planner.ts';
 
 /**
  * UI `PoiCat`(4종) → 백엔드 `PlaceType`. 원본 일정에 없던 장소(결과 목록에서 새로 담은 것)의
@@ -33,6 +38,40 @@ const DEFAULT_DURATION: Record<string, number> = {
   FOOD: 60,
 };
 const FALLBACK_DURATION = 90;
+
+/** UI 카테고리 → 백엔드 `PlaceType`. 원본 일정에 없던 장소의 타입을 정할 때 쓴다. */
+export function placeTypeOfCat(cat: PoiCat): string {
+  return PLACE_TYPE_BY_CAT[cat];
+}
+
+/**
+ * 체류시간(분) 결정 규칙 — **사용자 지정(F1) → 서버 원본 → 타입 기본값** 순.
+ * 코스 카드 표시(`CourseItem`)와 저장 페이로드가 반드시 같은 값을 쓰도록 여기 한 곳에 둔다.
+ */
+export function resolveDurationMinutes(
+  type: string,
+  metaDuration: number | null | undefined,
+  edited: number | null | undefined,
+): number {
+  if (edited != null) return edited;
+  if (metaDuration != null) return metaDuration;
+  return DEFAULT_DURATION[type] ?? FALLBACK_DURATION;
+}
+
+/**
+ * 서버 원본 일정에서 해당 장소의 메타를 찾는다(표시용 — 저장 경로는 내부 Map 을 쓴다).
+ * 다른 Day 로 옮긴 장소도 찾도록 전체 일정을 훑는다.
+ */
+export function findBasePlace(
+  baseSchedule: CourseScheduleDay[],
+  poiId: string,
+): CoursePlace | undefined {
+  for (const day of baseSchedule) {
+    const found = day.places.find((p) => String(p.contentId) === poiId);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 /** 시간 슬롯이 모자랄 때(장소를 새로 담았을 때) 다음 시각까지 두는 이동·여유 시간(분). */
 const TRAVEL_BUFFER = 60;
@@ -94,6 +133,8 @@ export interface BuildScheduleArgs {
   resolve: (poiId: string) => Poi | undefined;
   /** poiId → 사용자가 수정한 금액(총액) */
   overrides: Record<string, number>;
+  /** poiId → 사용자가 지정한 방문 시각·체류시간(F1). 지정된 장소만 들어 있다. */
+  placeTimes: Record<string, PlaceTimeEdit>;
   /** 여행 시작일 'yyyy-MM-dd'. 원본에 날짜가 없는 Day 의 날짜를 만들 때 쓴다. */
   startDate: string;
   pax: number;
@@ -108,16 +149,19 @@ export interface BuiltSchedule {
 /**
  * 편집된 코스 → GBC020 `schedule` 페이로드.
  *
- * 방문 시각 규칙: 그 날 **원본이 갖고 있던 시각들을 오름차순으로 모아 순번대로 배분**한다.
+ * 방문 시각 규칙: **사용자가 직접 지정한 시각(F1 `placeTimes`)이 최우선**이고, 지정이 없는 장소는
+ * 그 날 **원본이 갖고 있던 시각들을 오름차순으로 모아 순번대로 배분**한다.
  * 재정렬해도 시각이 뒤죽박죽되지 않고(1번 장소가 늘 가장 이른 시각), 아무것도 안 바꿨다면
  * 원본과 동일한 시각이 그대로 돌아간다. 장소를 더 담아 슬롯이 모자라면
  * 직전 장소의 `시각 + 체류시간 + 이동여유`로 이어 붙인다.
+ * 체류시간도 같은 우선순위(지정 → 원본 → 타입 기본값)를 따른다.
  */
 export function buildSchedulePayload({
   course,
   baseSchedule,
   resolve,
   overrides,
+  placeTimes,
   startDate,
   pax,
 }: BuildScheduleArgs): BuiltSchedule {
@@ -154,11 +198,17 @@ export function buildSchedulePayload({
       const poi = resolve(poiId);
       const type =
         meta?.type ?? (poi ? PLACE_TYPE_BY_CAT[poi.cat] : 'ATTRACTION');
-      const durationMinutes =
-        meta?.durationMinutes ?? DEFAULT_DURATION[type] ?? FALLBACK_DURATION;
+      const edit = placeTimes[poiId];
+      const durationMinutes = resolveDurationMinutes(
+        type,
+        meta?.durationMinutes,
+        edit?.durationMinutes,
+      );
 
+      // 사용자가 지정한 시각이 있으면 슬롯 배분을 건너뛴다(지정 없는 장소만 슬롯을 쓴다).
       const slot = slots[places.length];
       const startMinutes =
+        toMinutes(edit?.time) ??
         slot ??
         (prevEnd != null ? prevEnd + TRAVEL_BUFFER : DEFAULT_START_MINUTES);
       prevEnd = startMinutes + durationMinutes;
