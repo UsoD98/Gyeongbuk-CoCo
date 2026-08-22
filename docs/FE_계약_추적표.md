@@ -74,7 +74,15 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
   - ⚠️ 검증 규칙(`validateUpdateRequest` 실측): ①`schedule` 비어 있으면 400 ②**Day 마다 장소 1곳 이상**(`@NotEmpty` → 400 "일정에 최소 한 개의 장소가 필요합니다") ③`date` 는 코스 `startDate~endDate` 범위 안 ④`type` 은 유효한 `PlaceType` ⑤`contentId` 는 백엔드 후보 목록(`tourLiveDataService.getAllCandidates`)에 있어야 한다. FE는 ②를 보내기 전에 막고 어느 Day 인지 toast 로 알린다(`useCourseUpdate`).
   - ⚠️ **인증 없이 호출하면 401 이 아니라 500** 이 온다(실측). 매핑 존재 여부를 상태코드로 추정하지 말 것.
   - ⚠️ FE 조립 규칙(`utils/coursePayload`): UI 코스에 없는 원본 필드는 `plannerStore.baseSchedule`(응답 원본)에서 복원하고, 새로 담은 장소는 카탈로그 Poi 로 채운다. 방문 시각은 **그 날 원본 시각 슬롯을 순번대로 배분**(재정렬해도 시각이 역전되지 않음). 예산 override(총액)는 `cost`(1인 기준)로 환산해 보낸다(백엔드가 무시하더라도 계약대로 전송).
-- ⏸ `GET /poi/{contentId}` 미구현 → **P3 대기**.
+- ✅ **`GET /poi/{contentId}`(GBC018) 구현 확인(백엔드 소스 실측 2026-08-22)** — P3 착수·완료. `PoiController.getPoiDetail` + `PoiDetailServiceImpl`(TourAPI `detailCommon` + `detailInfo` 라이브 조회). 인증 불필요(`/api/v1/poi/**` permitAll).
+  - 응답 = `{contentId, contentTypeId, title, tel, homepage, overview, firstimage, firstimage2, addr1, addr2, mapx, mapy, avgPrice, infoList[{infoname, infotext}]}`(`PoiDetailResponseDto`). `title` 은 없으면 `'(제목없음)'` 으로 채워 **항상 문자열**, 나머지 문자열·좌표는 nullable, `infoList` 는 없으면 **빈 배열**(`List.of()`).
+  - ⚠️ **목록(GBC017)과 필드명이 다르다** — 썸네일이 `thumbnail` 이 아니라 `firstimage`/`firstimage2`. 좌표 키(`mapx`=경도·`mapy`=위도)는 동일.
+  - ✅ **HTML 은 백엔드가 제거해서 준다**(`stripHtml`: `<br>`→줄바꿈 후 태그 제거) → `overview`·`homepage`·`infotext` 는 그대로 텍스트로 렌더한다(`dangerouslySetInnerHTML` 불필요). 줄바꿈이 살아 있어 `whitespace-pre-line` 필요.
+  - ⚠️ **`avgPrice` 는 항상 null**(서비스가 명시적으로 `null` 고정, TODO BOQ14) → 목록과 같은 제약. 가격은 사용자 입력(override)만 의미가 있다.
+  - ⚠️ **좌표 `0`** 항목이 섞여 있다(목록과 동일) → `utils/coords.isValidTourCoord` 로 걸러 쓴다.
+  - ⚠️ **찜 상태(`liked`)는 상세 응답에도 없다** → #9 그대로 유효.
+  - ⚠️ 없는 contentId 는 **404** + `{code:404, msg:'존재하지 않는 POI입니다'}`(`GlobalExceptionHandler`). TourAPI 라이브 조회라 응답이 느릴 수 있고 동시 호출 시 503 가능(목록과 동일) → FE 는 contentId 단위 캐시 + in-flight dedup.
+  - `infoList` 는 유형마다 항목이 다르다(관광지=이용시간·주차, 음식점=대표메뉴·영업시간 …) → FE 는 이름에 '시간' 이 든 항목을 운영시간 폴백으로 쓰고 나머지는 부가정보 목록으로 표시.
 - ✅ **`GET /poi`(GBC017) 구현 확인(백엔드 v0.5.1, 2026-08-15)** — P2 완료. 응답 `{available, items[{contentId, contentTypeId, title, mapx, mapy, thumbnail, avgPrice}]}`(`PoiCurationResponseDto`/`PoiCurationItemDto`). 파라미터는 `sigunguCode`(단수·필수)·`peopleCount`(필수, **검증만 하고 필터엔 미사용**)·`contentTypeId`(선택). 인증 불필요(`SecurityConfig` permitAll).
   - ⚠️ **`theme` 파라미터 없음** — 가이드 §3의 `theme` 필터는 백엔드에 존재하지 않는다(테마 기반 큐레이션 불가). 필요하면 백엔드 추가 요청 대상.
   - ⚠️ **`avgPrice` 항상 null** — 근거 테이블 소실(백엔드 TODO `BOQ14`). FE는 가격 0을 '무료'가 아닌 **'가격 미정'**으로 표기한다. 예산 계산에서 POI 비용은 사용자가 직접 입력(override)해야 의미가 있다.
