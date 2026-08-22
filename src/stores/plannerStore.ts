@@ -12,6 +12,7 @@ import { httpsUrl } from '@/utils/format.ts';
 import type {
   Course,
   CourseDay,
+  LatLng,
   PlaceTimeEdit,
   Poi,
   PoiCat,
@@ -90,6 +91,12 @@ interface PlannerState {
    * ⚠️ key 가 poiId 라 같은 장소를 여러 Day 에 담으면 시간도 공유된다(`overrides` 와 같은 규약).
    */
   placeTimes: Record<string, PlaceTimeEdit>;
+  /**
+   * poiId → 장소명으로 찾은 좌표 (F5). 코스 조회 응답(GBC012·014)에는 좌표가 없어서,
+   * 큐레이션 목록(GBC017)을 부르지 않은 채 코스를 열면 지도에 찍을 좌표가 없다 → 이 자리로 메운다.
+   * ⚠️ **코스를 다시 불러도 비우지 않는다** — contentId 별 좌표는 변하지 않는 사실이라 캐시로 둔다.
+   */
+  placeCoords: Record<string, LatLng>;
   drawer: Drawer;
   /**
    * 서버에 아직 반영하지 않은 편집(추가·제거·재정렬·비용)이 있는지 (GBC020).
@@ -129,6 +136,8 @@ interface PlannerState {
   setPlaceDuration: (poiId: string, minutes: number) => void;
   /** 시각·체류시간 지정 해제(서버 원본 값으로 되돌림). */
   resetPlaceTime: (poiId: string) => void;
+  /** 장소명으로 찾은 좌표를 등록(F5). 이미 아는 좌표는 덮어쓰지 않는다. */
+  setPlaceCoords: (poiId: string, coords: LatLng) => void;
   /** 편집 내용을 서버에 반영 완료로 표시(GBC020 성공 시 `useCourseUpdate` 가 호출). */
   markPristine: () => void;
   openDrawer: (poiId: string) => void;
@@ -246,8 +255,25 @@ function synthesizePoi(place: CoursePlace, region: string): Poi {
  *
  * 기본은 카탈로그를 깔고 코스 쪽 값이 **있을 때만** 덮어쓴다(빈 문자열·0 = 정보 없음).
  * 분류(cat)는 카탈로그 기준 — 코스의 `PlaceType`을 섞으면 배지(cat)와 이미지 라벨(img)이 어긋난다.
+ *
+ * `coords`(F5): 두 출처 모두 좌표가 없을 때만 얹는 장소명 기반 좌표. 실좌표(카탈로그)를
+ * 덮어쓰지 않는다 — 검색 결과보다 API 좌표가 언제나 정확하다.
  */
 export function mergePoi(
+  fromCourse: Poi | undefined,
+  fromCatalog: Poi | undefined,
+  coords?: LatLng,
+): Poi | undefined {
+  return withCoords(mergeSources(fromCourse, fromCatalog), coords);
+}
+
+/** 좌표가 비어 있을 때만 채운다. */
+function withCoords(poi: Poi | undefined, coords?: LatLng): Poi | undefined {
+  if (!poi || !coords || poi.lat != null) return poi;
+  return { ...poi, lat: coords.lat, lng: coords.lng };
+}
+
+function mergeSources(
   fromCourse: Poi | undefined,
   fromCatalog: Poi | undefined,
 ): Poi | undefined {
@@ -276,12 +302,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   activeDay: 0,
   overrides: {},
   placeTimes: {},
+  placeCoords: {},
   drawer: { open: false, poiId: null },
   dirty: false,
 
   resolvePoi: (id) => {
-    const { apiPois, poiCatalog } = get();
-    return mergePoi(apiPois[id], poiCatalog[id]);
+    const { apiPois, poiCatalog, placeCoords } = get();
+    return mergePoi(apiPois[id], poiCatalog[id], placeCoords[id]);
   },
 
   registerPois: (pois) =>
@@ -474,6 +501,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
         dirty: true,
       };
     }),
+
+  setPlaceCoords: (poiId, coords) =>
+    set((s) =>
+      s.placeCoords[poiId]
+        ? {}
+        : { placeCoords: { ...s.placeCoords, [poiId]: coords } },
+    ),
 
   resetPlaceTime: (poiId) =>
     set((s) => {

@@ -56,6 +56,12 @@ export interface CategoryMeta {
   label: string;
 }
 
+/** 위·경도 한 쌍. 장소명으로 찾은 좌표(F5) 등 좌표만 주고받는 자리에 쓴다. */
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 /**
  * 코스 항목의 사용자 지정 시간(F1). 지정하지 않은 필드는 서버 원본(`baseSchedule`)·기본값을 쓴다.
  * 코스 저장(GBC020) 페이로드에서 방문 시각·체류시간의 최우선 근거가 된다.

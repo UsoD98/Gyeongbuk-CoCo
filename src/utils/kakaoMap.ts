@@ -39,6 +39,24 @@ export interface KakaoOverlay {
   setZIndex: (z: number) => void;
 }
 
+/** 카카오 로컬 키워드 검색 결과(쓰는 필드만). `x`=경도, `y`=위도, 둘 다 문자열. */
+export interface KakaoPlacesItem {
+  x: string;
+  y: string;
+  place_name?: string;
+}
+
+/** `libraries=services` 로 함께 받는 로컬 검색 모듈(쓰는 API 만 좁게 선언). */
+export interface KakaoServices {
+  Places: new () => {
+    keywordSearch: (
+      keyword: string,
+      callback: (data: KakaoPlacesItem[], status: string) => void,
+    ) => void;
+  };
+  Status: { OK: string; ZERO_RESULT: string; ERROR: string };
+}
+
 export interface KakaoMaps {
   LatLng: new (lat: number, lng: number) => KakaoLatLng;
   LatLngBounds: new () => KakaoLatLngBounds;
@@ -62,6 +80,11 @@ export interface KakaoMaps {
     strokeStyle?: string;
   }) => KakaoOverlay;
   load: (callback: () => void) => void;
+  /**
+   * 로컬 검색(장소명→좌표). `libraries=services` 로 SDK 를 받아야 존재한다.
+   * 앱에 '로컬' API 가 비활성이면 호출 시 status 가 ERROR 로 떨어진다(예외는 아님).
+   */
+  services?: KakaoServices;
 }
 
 declare global {
@@ -73,8 +96,11 @@ declare global {
 /** 경상북도 대략 중심(도청 인근). 표시할 좌표가 하나도 없을 때의 기본 중심. */
 export const GYEONGBUK_CENTER = { lat: 36.576, lng: 128.5056 };
 
+// `libraries=services` = 로컬 검색 모듈. 코스 장소는 응답에 좌표가 없어(GBC012) 이름으로
+// 좌표를 찾아야 하고(F5 · utils/kakaoGeocode), 그 모듈이 이 파라미터로만 딸려 온다.
+// 지도 자체는 이 파라미터와 무관하게 동작한다(로컬 미활성이어도 지도는 그대로 뜬다).
 const SDK_SRC = (key: string) =>
-  `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false`;
+  `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
 
 // 로드를 1회로 합친다(데스크톱·모바일 ResultsPanel 이 지도를 동시에 마운트한다).
 let sdkPromise: Promise<KakaoMaps | null> | null = null;

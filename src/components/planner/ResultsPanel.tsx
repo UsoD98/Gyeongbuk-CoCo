@@ -77,6 +77,9 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const resolvePoi = usePoiResolver();
 
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  // '내 코스만 보기'(F5). null = 사용자가 아직 손대지 않음 → 지역 미선택이면 자동으로 on
+  // (컬렉션에서 코스만 열어 본 경우가 그렇다). 명시적으로 켜고 끄면 그 선택이 유지된다.
+  const [courseOnly, setCourseOnly] = useState<boolean | null>(null);
   const [cat, setCat] = useState<string>('all');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [pageKey, setPageKey] = useState('');
@@ -108,10 +111,11 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const visible = shown.slice(0, limit).map((p) => resolvePoi(p.id) ?? p);
   const inDay = (id: string) =>
     course.days[activeDay]?.items.includes(id) ?? false;
+  const courseOnlyOn = courseOnly ?? !search.dests.length;
 
   const header = (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="flex items-center gap-1.5 font-bold">
             <Compass size={18} className="text-primary" />
@@ -119,6 +123,17 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
           </span>
           <span className="badge badge-sm badge-ghost">{pois.length}곳</span>
         </div>
+        {viewMode === 'map' && (
+          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-base-content/70">
+            <input
+              type="checkbox"
+              className="toggle toggle-xs toggle-primary"
+              checked={courseOnlyOn}
+              onChange={(e) => setCourseOnly(e.target.checked)}
+            />
+            내 코스만 보기
+          </label>
+        )}
         <div className="join">
           <button
             type="button"
@@ -144,7 +159,13 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      {/* 코스만 보는 지도에서는 POI 마커가 없어 카테고리 칩이 아무 일도 하지 않는다 → 숨긴다. */}
+      <div
+        className={cn(
+          'flex flex-wrap gap-1.5',
+          viewMode === 'map' && courseOnlyOn && 'hidden',
+        )}
+      >
         {CAT_CHIPS.map(([k, l]) => (
           <button
             key={k}
@@ -185,6 +206,17 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
       경주시로 둘러보기
     </button>
   );
+
+  // 지도 모드는 아래 안내 상태들(지역 미선택·로딩·데이터 없음)보다 **먼저** 렌더한다 (F5).
+  // 전에는 지역 미선택 early return 에 걸려, 컬렉션에서 코스를 열면 '지도' 를 눌러도
+  // 지도가 나타나지 않았다('~시로 둘러보기'로 지역을 채워야 비로소 열렸다).
+  if (viewMode === 'map') {
+    return shell(
+      <div className="relative min-h-80 flex-1">
+        <MapView pois={courseOnlyOn ? [] : visible} />
+      </div>,
+    );
+  }
 
   // 지역 미선택(코스 상세로 바로 진입하면 search.dests 가 비어 있다)
   if (!search.dests.length) {
@@ -257,11 +289,7 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   }
 
   return shell(
-    viewMode === 'map' ? (
-      <div className="relative min-h-80 flex-1">
-        <MapView pois={visible} />
-      </div>
-    ) : (
+    (
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className={gridCls}>
           {visible.map((p) =>
