@@ -34,11 +34,13 @@ const formatDate = (date: Date | null): string | null => {
   return `${year}-${month}-${day}`;
 };
 
-/** 이동수단 선택지 (백엔드 TransportType enum과 1:1). 라벨은 표시용. */
+/**
+ * 이동수단 선택지. 백엔드 TransportType enum 은 WALK 도 갖지만 코스 단위 이동수단으로는
+ * 현실적이지 않아 선택지에서 뺐다(값 자체는 과거 코스 표시를 위해 타입·라벨에 남아 있다).
+ */
 const TRANSPORT_OPTIONS: { value: Transport; label: string }[] = [
   { value: 'CAR', label: '자동차' },
   { value: 'PUBLIC_TRANSPORT', label: '대중교통' },
-  { value: 'WALK', label: '도보' },
 ];
 
 /**
@@ -73,8 +75,8 @@ const DateTrigger = forwardRef<
 DateTrigger.displayName = 'DateTrigger';
 
 export default function Index() {
-  const [selectedDestinations, setSelectedDestinations] = useState<string[]>(
-    [],
+  const [selectedDestination, setSelectedDestination] = useState<string | null>(
+    null,
   );
   const [number, setNumber] = useState(1);
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([
@@ -164,28 +166,14 @@ export default function Index() {
 
   const hasSelectedThemes = selectedThemeLabels.length > 0;
 
-  const selectedDestinationLabels = useMemo(
-    () =>
-      selectedDestinations
-        .map((value) => getSigunguLabel(value))
-        .filter((label): label is string => Boolean(label)),
-    [selectedDestinations, getSigunguLabel],
+  const selectedDestinationLabel = useMemo(
+    () => (selectedDestination ? getSigunguLabel(selectedDestination) : null),
+    [selectedDestination, getSigunguLabel],
   );
 
-  const destinationSummary =
-    selectedDestinationLabels.length > 0
-      ? selectedDestinationLabels.join(', ')
-      : '어디로 떠나시나요?';
+  const destinationSummary = selectedDestinationLabel ?? '어디로 떠나시나요?';
 
-  const toggleDestination = (value: string) => {
-    setSelectedDestinations((current) =>
-      current.includes(value)
-        ? current.filter((destination) => destination !== value)
-        : [...current, value],
-    );
-  };
-
-  const hasSelectedDestinations = selectedDestinationLabels.length > 0;
+  const hasSelectedDestination = Boolean(selectedDestinationLabel);
 
   const transportLabel =
     TRANSPORT_OPTIONS.find((option) => option.value === transport)?.label ??
@@ -208,11 +196,9 @@ export default function Index() {
     }
 
     // 계약(docs/FE_계약_추적표.md #2): sigunguCodes 는 법정동 시군구 코드(3자리 bare, 예 '130').
-    // 실측 확정 — 접두 '47' 없이 sigunguStore value 그대로, 복수 허용. 목적지 UI가 복수 선택이므로
-    // 선택 전부를 전송한다(미선택 시 생략 → 백엔드가 경북 전역에서 선정).
-    const sigunguCodes = selectedDestinations.length
-      ? selectedDestinations
-      : undefined;
+    // 실측 확정 — 접두 '47' 없이 sigunguStore value 그대로, 배열 전송. 목적지 UI는 단일 선택이므로
+    // 원소 1개짜리 배열을 보낸다(미선택 시 생략 → 백엔드가 경북 전역에서 선정).
+    const sigunguCodes = selectedDestination ? [selectedDestination] : undefined;
 
     setIsSubmitting(true);
     try {
@@ -224,12 +210,10 @@ export default function Index() {
         theme: selectedThemeLabels, // 계약(#3): 한국어 라벨 전송(코드/목id 금지)
         sigunguCodes,
       });
-      const destLabel = selectedDestinations.length
-        ? getSigunguLabel(selectedDestinations[0])
-        : undefined;
+      const destLabel = selectedDestinationLabel ?? undefined;
       usePlannerStore.getState().loadFromApi(res, {
         title: destLabel ? `${destLabel} 여행 코스` : 'AI 추천 코스',
-        dests: selectedDestinations,
+        dests: selectedDestination ? [selectedDestination] : [],
         start,
         end,
         pax: number,
@@ -281,7 +265,7 @@ export default function Index() {
                   <span
                     className={cn(
                       'block min-w-0 flex-1 truncate',
-                      hasSelectedDestinations
+                      hasSelectedDestination
                         ? 'text-base-content'
                         : 'text-base-content/50',
                     )}
@@ -301,24 +285,30 @@ export default function Index() {
                   <div className="absolute top-full left-0 z-10 mt-2 w-full rounded-xl border border-base-300 bg-base-100 p-2 shadow-lg">
                     <div className="max-h-56 space-y-1 overflow-y-auto">
                       {sigunguList.map((option) => (
-                        <label
+                        <button
                           key={option.value}
-                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-xs text-base-content/70 transition hover:bg-base-200 sm:text-sm"
+                          type="button"
+                          onClick={() => {
+                            setSelectedDestination((current) =>
+                              current === option.value ? null : option.value,
+                            );
+                            setIsDestinationDropdownOpen(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition hover:bg-base-200 sm:text-sm',
+                            selectedDestination === option.value
+                              ? 'font-semibold text-primary'
+                              : 'text-base-content/70',
+                          )}
                         >
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-sm checkbox-primary"
-                            checked={selectedDestinations.includes(option.value)}
-                            onChange={() => toggleDestination(option.value)}
-                          />
                           <span className="min-w-0 flex-1 truncate">
                             {option.label}
                           </span>
-                        </label>
+                          {selectedDestination === option.value ? (
+                            <Check size={16} className="shrink-0 text-primary" />
+                          ) : null}
+                        </button>
                       ))}
-                    </div>
-                    <div className="mt-2 border-t border-base-200 pt-2 text-xs text-base-content/50">
-                      복수 선택 가능
                     </div>
                   </div>
                 ) : null}
