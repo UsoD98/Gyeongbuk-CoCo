@@ -106,9 +106,19 @@ export interface CreateCourseRequest {
   sigunguCodes?: string[];
 }
 
-/** AI 코스 생성 응답 (GBC010) — 생성 직후엔 title/헤더 없이 courseId + 일정만 온다. */
+/**
+ * AI 코스 생성 응답 (GBC010) — courseId + 서버가 지은 제목 + 일정.
+ * (헤더 정보 `peopleCount`/기간/`transport`/`theme` 는 여전히 없다 — 요청 값 그대로라 FE 가 안다.)
+ */
 export interface CreateCourseResponse {
   courseId: number;
+  /**
+   * 서버가 저장한 코스 제목. 백엔드 `buildDefaultTitle` 이 시군구명으로 짓는다
+   * (예 '경주 여행 코스' · 복수면 '경주 외 2곳 여행 코스' · 미선택이면 '여행 코스').
+   * DB 에 그대로 저장되는 값이라 목록(GBC011)·상세(GBC012)에서 다시 만나는 제목과 같다
+   * → FE 가 임의로 지어 붙이지 말고 이 값을 쓴다.
+   */
+  title: string;
   schedule: CourseScheduleDay[];
 }
 
@@ -136,7 +146,7 @@ export interface UpdateCourseRequest {
 
 /**
  * POST /tour-course — AI 코스 생성 (비로그인 허용).
- * 응답엔 courseId + schedule(장소는 seq/time/type/contentId)만 담긴다.
+ * 응답엔 courseId + title(서버가 지은 제목) + schedule 이 담긴다.
  * 장소명/가격/좌표는 없으므로 UI는 POI 상세(GBC018) 연동 전까지 placeholder로 표시한다.
  * ⚠️ 좌표(`mapx`/`mapy`)는 이 응답에 **없다** — 상세/공개뷰 응답에만 있다(`CoursePlace` 주석).
  */

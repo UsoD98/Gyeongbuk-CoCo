@@ -51,6 +51,10 @@ interface Drawer {
  * 검색 폼 입력값을 넘겨 요약/예산 표시에 사용한다.
  */
 export interface LoadFromApiContext {
+  /**
+   * 제목 **폴백**. 정본은 생성 응답의 `title`(서버가 저장한 제목)이고, 그게 비어 있을 때만 쓴다.
+   * FE 가 지은 제목을 서버 값보다 앞세우면 목록·상세에서 다른 제목이 나와 어긋난다.
+   */
   title: string;
   dests: string[];
   start: string;
@@ -377,7 +381,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       baseSchedule: res.schedule,
       transport: ctx.transport,
       transportOverride: null,
-      course: { title: ctx.title, days },
+      // 제목은 서버가 저장한 값(GBC010 응답)이 정본 — 목록(GBC011)·상세(GBC012)와 같은 문자열이다.
+      // 비어 있을 때만 홈에서 만든 폴백을 쓴다.
+      course: { title: res.title?.trim() || ctx.title, days },
       search: {
         dests: ctx.dests,
         start: ctx.start,
