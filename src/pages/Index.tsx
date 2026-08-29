@@ -210,6 +210,8 @@ export default function Index() {
         theme: selectedThemeLabels, // 계약(#3): 한국어 라벨 전송(코드/목id 금지)
         sigunguCodes,
       });
+      // 제목은 생성 응답의 `res.title`(서버가 저장한 값)을 쓴다 — 아래 title 은 응답이
+      // 비었을 때만 쓰이는 폴백이다(loadFromApi 참조).
       const destLabel = selectedDestinationLabel ?? undefined;
       usePlannerStore.getState().loadFromApi(res, {
         title: destLabel ? `${destLabel} 여행 코스` : 'AI 추천 코스',
