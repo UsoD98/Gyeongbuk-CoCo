@@ -76,10 +76,10 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
   const resolvePoi = usePoiResolver();
 
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  // '내 코스만 보기'(F5). null = 사용자가 아직 손대지 않음 → 지역 미선택이면 자동으로 on
-  // (컬렉션에서 코스만 열어 본 경우가 그렇다). 명시적으로 켜고 끄면 그 선택이 유지된다.
-  const [courseOnly, setCourseOnly] = useState<boolean | null>(null);
+  // 코스를 만들고 들어오면 가장 먼저 보고 싶은 것은 "내 일정이 어떻게 이어지는가"다
+  // → 지도 + '내 코스만 보기'로 연다. 둘 다 사용자가 바꾸면 그 선택이 유지된다.
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
+  const [courseOnly, setCourseOnly] = useState(true);
   const [cat, setCat] = useState<string>('all');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [pageKey, setPageKey] = useState('');
@@ -111,7 +111,7 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
   const visible = shown.slice(0, limit).map((p) => resolvePoi(p.id) ?? p);
   const inDay = (id: string) =>
     course.days[activeDay]?.items.includes(id) ?? false;
-  const courseOnlyOn = courseOnly ?? !search.dests.length;
+  const courseOnlyOn = courseOnly;
 
   const header = (
     <div className="flex flex-col gap-2.5">
@@ -123,40 +123,46 @@ export default function ResultsPanel({ mobile = false }: { mobile?: boolean }) {
           </span>
           <span className="badge badge-sm badge-ghost">{pois.length}곳</span>
         </div>
-        {viewMode === 'map' && (
-          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-base-content/70">
-            <input
-              type="checkbox"
-              className="toggle toggle-xs toggle-primary"
-              checked={courseOnlyOn}
-              onChange={(e) => setCourseOnly(e.target.checked)}
-            />
-            내 코스만 보기
-          </label>
-        )}
-        <div className="join">
-          <button
-            type="button"
-            className={cn(
-              'btn btn-xs join-item gap-1',
-              viewMode === 'list' ? 'btn-primary' : 'btn-ghost',
-            )}
-            onClick={() => setViewMode('list')}
-          >
-            <LayoutGrid size={14} />
-            리스트
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'btn btn-xs join-item gap-1',
-              viewMode === 'map' ? 'btn-primary' : 'btn-ghost',
-            )}
-            onClick={() => setViewMode('map')}
-          >
-            <MapIcon size={14} />
-            지도
-          </button>
+        {/*
+          토글과 뷰 전환 버튼은 한 묶음으로 오른쪽에 붙인다 — 따로 두면 부모의
+          justify-between 이 셋을 벌려 토글이 헤더 한가운데로 떨어진다.
+        */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {viewMode === 'map' && (
+            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-base-content/70">
+              <input
+                type="checkbox"
+                className="toggle toggle-xs toggle-primary"
+                checked={courseOnlyOn}
+                onChange={(e) => setCourseOnly(e.target.checked)}
+              />
+              내 코스만 보기
+            </label>
+          )}
+          <div className="join">
+            <button
+              type="button"
+              className={cn(
+                'btn btn-xs join-item gap-1',
+                viewMode === 'map' ? 'btn-primary' : 'btn-ghost',
+              )}
+              onClick={() => setViewMode('map')}
+            >
+              <MapIcon size={14} />
+              지도
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'btn btn-xs join-item gap-1',
+                viewMode === 'list' ? 'btn-primary' : 'btn-ghost',
+              )}
+              onClick={() => setViewMode('list')}
+            >
+              <LayoutGrid size={14} />
+              리스트
+            </button>
+          </div>
         </div>
       </div>
       {/* 코스만 보는 지도에서는 POI 마커가 없어 카테고리 칩이 아무 일도 하지 않는다 → 숨긴다. */}
