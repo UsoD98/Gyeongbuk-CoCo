@@ -84,7 +84,7 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
       {...openProps}
       className={cn(
         'card relative flex gap-2.5 rounded-2xl bg-base-100 p-2.5 shadow-sm transition-shadow',
-        'cursor-default touch-none select-none hover:shadow-md',
+        'cursor-default select-none hover:shadow-md',
         isDragging && 'opacity-50 ring-2 ring-primary/30',
       )}
       style={{ transform: CSS.Transform.toString(transform), transition }}
@@ -99,6 +99,10 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
             'relative items-center justify-center my-auto shrink-0',
             // 사진에서만 드래그 가능하다는 시각적 단서
             'cursor-grab active:cursor-grabbing',
+            // touch-action:none 은 포인터를 가로챌 핸들에만 건다(R1).
+            // 카드 루트에 걸면 카드 위 세로 스와이프가 스크롤로 먹지 않아
+            // 모바일 코스 탭에서 리스트를 내릴 수 없다.
+            'touch-none',
           )}
         >
           <ImgPlaceholder
