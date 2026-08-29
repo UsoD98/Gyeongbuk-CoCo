@@ -188,7 +188,14 @@ export default function BudgetDashboard({
                     value={transport}
                     onChange={(e) => setTransport(e.target.value as Transport)}
                   >
-                    {TRANSPORT_ORDER.map((t) => (
+                    {/*
+                      도보로 저장된 과거 코스를 열면 현재 값이 선택지에 없어 빈칸으로
+                      보이므로, 그때만 그 값을 폴백 항목으로 덧붙인다.
+                    */}
+                    {(TRANSPORT_ORDER.includes(transport)
+                      ? TRANSPORT_ORDER
+                      : [...TRANSPORT_ORDER, transport]
+                    ).map((t) => (
                       <option key={t} value={t}>
                         {TRANSPORT_LABEL[t]}
                       </option>

@@ -5,15 +5,19 @@
 
 import type { Transport } from '@/api/tourCourse.ts';
 
-/** 이동수단 표시 라벨(백엔드 enum → 한국어). Index.tsx TRANSPORT_OPTIONS와 동일. */
+/**
+ * 이동수단 표시 라벨(백엔드 enum → 한국어).
+ * `WALK` 는 더 이상 고를 수 없지만(→ `TRANSPORT_ORDER`) 그 값으로 저장된 과거 코스를
+ * 컬렉션·공개뷰에서 표시해야 하므로 라벨은 남긴다.
+ */
 export const TRANSPORT_LABEL: Record<Transport, string> = {
   CAR: '자동차',
   PUBLIC_TRANSPORT: '대중교통',
   WALK: '도보',
 };
 
-/** 이동수단 선택 순서(홈 검색 폼 `Index.TRANSPORT_OPTIONS` 와 동일 순서). */
-export const TRANSPORT_ORDER: Transport[] = ['CAR', 'PUBLIC_TRANSPORT', 'WALK'];
+/** 이동수단 선택 순서(홈 검색 폼 `Index.TRANSPORT_OPTIONS` 와 동일 순서). 도보는 선택 불가. */
+export const TRANSPORT_ORDER: Transport[] = ['CAR', 'PUBLIC_TRANSPORT'];
 
 /**
  * 코스 일정 장소 타입(백엔드 PlaceType, 실측 7종) → 한국어 라벨.

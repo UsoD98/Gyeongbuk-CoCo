@@ -34,11 +34,13 @@ const formatDate = (date: Date | null): string | null => {
   return `${year}-${month}-${day}`;
 };
 
-/** 이동수단 선택지 (백엔드 TransportType enum과 1:1). 라벨은 표시용. */
+/**
+ * 이동수단 선택지. 백엔드 TransportType enum 은 WALK 도 갖지만 코스 단위 이동수단으로는
+ * 현실적이지 않아 선택지에서 뺐다(값 자체는 과거 코스 표시를 위해 타입·라벨에 남아 있다).
+ */
 const TRANSPORT_OPTIONS: { value: Transport; label: string }[] = [
   { value: 'CAR', label: '자동차' },
   { value: 'PUBLIC_TRANSPORT', label: '대중교통' },
-  { value: 'WALK', label: '도보' },
 ];
 
 /**
