@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import {
   ArrowRight,
-  Check,
   Clock,
   Globe,
   Map as MapIcon,
   MapPin,
+  Minus,
   Phone,
   Plus,
   Users,
@@ -36,6 +36,7 @@ export default function PoiDrawer() {
   const activeDay = usePlannerStore((s) => s.activeDay);
   const closeDrawer = usePlannerStore((s) => s.closeDrawer);
   const addPoi = usePlannerStore((s) => s.addPoi);
+  const removePoi = usePlannerStore((s) => s.removePoi);
   // POI 데이터 소스는 usePoi 훅으로 캡슐화(P0). P3(GBC018)에서 실상세 조회로 교체 —
   // 목록/코스로 이미 아는 값은 즉시 그리고 상세(소개·연락처·부가정보)는 도착하는 대로 채운다.
   // 훅은 조건부 호출 불가 → 최상단에서 호출(poiId 없으면 조회하지 않는다).
@@ -295,13 +296,19 @@ export default function PoiDrawer() {
           >
             닫기
           </button>
+          {/*
+            이미 담긴 장소면 같은 자리에서 바로 뺄 수 있게 한다 — 전에는 '추가됨' 이라
+            누를 수는 있으나 스토어가 중복이라며 거절하는, 아무 일도 못 하는 버튼이었다.
+          */}
           <button
             type="button"
-            className={cn('btn grow gap-1', inDay ? 'btn-soft' : 'btn-primary')}
-            onClick={() => addPoi(poi.id)}
+            className={cn('btn grow gap-1', inDay ? 'btn-error' : 'btn-primary')}
+            onClick={() =>
+              inDay ? removePoi(activeDay, poi.id) : addPoi(poi.id)
+            }
           >
-            {inDay ? <Check size={18} /> : <Plus size={18} />}
-            {inDay ? `${day?.label}에 추가됨` : `${day?.label}에 추가`}
+            {inDay ? <Minus size={18} /> : <Plus size={18} />}
+            {inDay ? `${day?.label}에서 제거` : `${day?.label}에 추가`}
           </button>
         </div>
       </div>

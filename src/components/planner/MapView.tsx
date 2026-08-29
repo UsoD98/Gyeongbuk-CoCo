@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
+import ConfirmDialog from '@/components/common/ConfirmDialog.tsx';
 import { projectToPlaceholder } from '@/components/planner/mapModel.ts';
 import type { MapMarker } from '@/components/planner/mapModel.ts';
 import KakaoMap from '@/components/planner/parts/KakaoMap.tsx';
@@ -34,6 +35,8 @@ export default function MapView({ pois }: { pois: Poi[] }) {
   // 코스 항목은 목이 아니라 해석기로 푼다(API 코스 장소·큐레이션 카탈로그 병합).
   const resolvePoi = usePoiResolver();
   const [kakaoFailed, setKakaoFailed] = useState(false);
+  /** 빼기 확인 대기 중인 장소 id(null = 대화상자 닫힘). */
+  const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
 
   const day = course.days[activeDay];
   const dayItems = day?.items;
@@ -74,46 +77,82 @@ export default function MapView({ pois }: { pois: Poi[] }) {
    * 마커 토글(F6) — 활성 Day 에 있으면 빼고, 없으면 담는다.
    * 담기는 `addPoi`(맨 뒤 삽입·중복은 스토어가 toast 로 거절), 빼기는 `removePoi`.
    * 둘 다 `dirty` 를 세우므로 저장 버튼이 '변경 저장'으로 바뀐다.
+   *
+   * **빼기만 확인을 받는다** — 마커의 −/+ 버튼은 20px 남짓이라 지도를 짚다 잘못 누르기 쉽고,
+   * 빼면 그 자리에서 정해 둔 시각·체류시간·비용까지 함께 날아간다. 담기는 잘못 눌러도
+   * 바로 되돌릴 수 있으므로 묻지 않는다.
    */
   const toggleInCourse = useCallback(
     (poiId: string) => {
       if (!day) return;
-      if (day.items.includes(poiId)) removePoi(activeDay, poiId);
+      if (day.items.includes(poiId)) setPendingRemoval(poiId);
       else addPoi(poiId);
     },
-    [activeDay, addPoi, day, removePoi],
+    [addPoi, day],
   );
 
-  if (kakaoFailed) {
-    // 폴백 지도는 % 좌표로 그린다 → 실좌표가 있는 장소는 그 집합에 맞춰 재투영해야
-    // 코스 장소(원래 x/y 가 전부 50)가 중앙에 겹치지 않는다.
-    const positions = projectToPlaceholder([
-      ...route,
-      ...markers.map((m) => m.poi),
-    ]);
-    const place = (poi: Poi): Poi => {
-      const pos = positions.get(poi.id);
-      return pos ? { ...poi, x: pos.x, y: pos.y } : poi;
-    };
+  /** 확인 문구에 쓸 장소명(해석 실패하면 이름 없이 묻는다). */
+  const pendingRemovalName = pendingRemoval
+    ? (resolvePoi(pendingRemoval)?.name ?? null)
+    : null;
+
+  const confirmRemoval = useCallback(() => {
+    if (pendingRemoval) removePoi(activeDay, pendingRemoval);
+    setPendingRemoval(null);
+  }, [activeDay, pendingRemoval, removePoi]);
+
+  const map = (() => {
+    if (kakaoFailed) {
+      // 폴백 지도는 % 좌표로 그린다 → 실좌표가 있는 장소는 그 집합에 맞춰 재투영해야
+      // 코스 장소(원래 x/y 가 전부 50)가 중앙에 겹치지 않는다.
+      const positions = projectToPlaceholder([
+        ...route,
+        ...markers.map((m) => m.poi),
+      ]);
+      const place = (poi: Poi): Poi => {
+        const pos = positions.get(poi.id);
+        return pos ? { ...poi, x: pos.x, y: pos.y } : poi;
+      };
+      return (
+        <PlaceholderMap
+          markers={markers.map((m) => ({ ...m, poi: place(m.poi) }))}
+          route={route.map(place)}
+          onSelect={openDrawer}
+          onToggle={toggleInCourse}
+          dayLabel={dayLabel}
+        />
+      );
+    }
+
     return (
-      <PlaceholderMap
-        markers={markers.map((m) => ({ ...m, poi: place(m.poi) }))}
-        route={route.map(place)}
+      <KakaoMap
+        markers={markers}
+        route={route}
         onSelect={openDrawer}
         onToggle={toggleInCourse}
         dayLabel={dayLabel}
+        onFail={() => setKakaoFailed(true)}
       />
     );
-  }
+  })();
 
   return (
-    <KakaoMap
-      markers={markers}
-      route={route}
-      onSelect={openDrawer}
-      onToggle={toggleInCourse}
-      dayLabel={dayLabel}
-      onFail={() => setKakaoFailed(true)}
-    />
+    <>
+      {map}
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        title="코스에서 뺄까요?"
+        description={
+          pendingRemovalName
+            ? `${pendingRemovalName}을(를) ${dayLabel} 일정에서 뺍니다. 지정해 둔 시각·체류시간·비용도 함께 사라져요.`
+            : undefined
+        }
+        confirmLabel="빼기"
+        cancelLabel="취소"
+        danger
+        onConfirm={confirmRemoval}
+        onCancel={() => setPendingRemoval(null)}
+      />
+    </>
   );
 }
