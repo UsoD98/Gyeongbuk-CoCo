@@ -4,7 +4,9 @@ import { catOfContentType, getPois } from '@/api/poi.ts';
 import type { PoiListResponse, PoiSummary } from '@/api/poi.ts';
 import { useAsync } from '@/hooks/useAsync.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
+import { useAuthStore, authSessionKey } from '@/stores/authStore.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
+import { usePoiLikeStore } from '@/stores/poiLikeStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { isValidTourCoord as validCoord } from '@/utils/coords.ts';
 import { httpsUrl } from '@/utils/format.ts';
@@ -21,6 +23,9 @@ import type { Poi } from '@/types/planner.ts';
  *    선택 지역마다 병렬 호출(`Promise.all`)해 결과를 합친다(정책: 사용자가 고른 지역 전부 노출).
  * ⚠️ 백엔드에 `theme` 파라미터가 없어 **테마 필터/정렬은 불가**(P0의 목 기반 테마 우선정렬 제거).
  * ⚠️ `avgPrice`는 백엔드가 항상 null(BOQ14) → 가격은 0("무료"가 아닌 '정보 준비 중'으로 표기).
+ * ▷ 백엔드 0.6.4/0.6.7 로 항목에 `liked`(로그인 사용자 찜 여부)·`stars`(별점)가 실린다.
+ *   `liked` 는 `poiLikeStore` 에 싣고(하트가 새로고침 후에도 서버 상태로 보인다), `stars` 는
+ *   `Poi.rating` 으로 옮긴다. 총 좋아요 수(`totalLiked`)는 **목록엔 없다** — 상세(GBC018)에만 있다.
  */
 export interface UsePoiListArgs {
   /** 시군구 코드 배열(3자리 bare, `sigunguStore.value`). 비어 있으면 조회하지 않는다. */
@@ -58,8 +63,10 @@ const inflight = new Map<string, Promise<PoiListResponse>>();
 function fetchPoisShared(
   sigunguCode: string,
   peopleCount: number,
+  session: string,
 ): Promise<PoiListResponse> {
-  const key = `${sigunguCode}|${peopleCount}`;
+  // 세션까지 키에 넣는다 — 응답의 `liked` 는 사용자별 값이라 로그인 전후 요청을 공유하면 안 된다.
+  const key = `${sigunguCode}|${peopleCount}|${session}`;
   const pending = inflight.get(key);
   if (pending) return pending;
   const req = getPois({ sigunguCode, peopleCount }).finally(() => {
@@ -106,7 +113,7 @@ function projectToPercent(flat: FlatItem[]): (item: PoiSummary) => {
   };
 }
 
-/** GBC017 항목 → UI `Poi`. 이름/좌표/썸네일은 실데이터, 상세(설명·평점·시간)는 P3에서 채운다. */
+/** GBC017 항목 → UI `Poi`. 이름·좌표·썸네일·별점은 실데이터, 설명·시간은 상세(P3)가 채운다. */
 function toPoi(
   { item, sigunguCode }: FlatItem,
   regionName: string | undefined,
@@ -127,7 +134,8 @@ function toPoi(
     priceNote: item.avgPrice == null ? '가격 미정' : '1인 평균',
     // 목록 응답엔 운영시간이 없다(빈 문자열 = 정보 없음). 코스 응답·POI 상세(P3)가 채운다.
     hours: '',
-    rating: 0,
+    // 별점(백엔드 0.6.7). 평점 데이터가 없으면 null → 0(= 평점 없음, 표시 생략).
+    rating: item.stars ?? 0,
     reviews: 0,
     x: pos.x,
     y: pos.y,
@@ -144,6 +152,10 @@ function toPoi(
 export function usePoiList({ dests, pax }: UsePoiListArgs): PoiListState {
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
   const registerPois = usePlannerStore((s) => s.registerPois);
+  const hydrateLikes = usePoiLikeStore((s) => s.hydrate);
+  // 세션 키. 응답의 `liked` 가 사용자별 값이라, 로그인/로그아웃하면 값이 바뀌어 재조회된다
+  // (로그인 직후에도 하트가 미찜으로 남지 않게). 토큰 자체는 axios 인터셉터가 싣는다.
+  const session = useAuthStore(() => authSessionKey());
 
   // 배열은 매 렌더 새 참조라 fetcher 가 불안정해진다 → 문자열 키로 고정.
   const destKey = dests.join(',');
@@ -152,9 +164,9 @@ export function usePoiList({ dests, pax }: UsePoiListArgs): PoiListState {
     const codes = destKey ? destKey.split(',') : [];
     if (!codes.length) return [];
     return Promise.all(
-      codes.map((sigunguCode) => fetchPoisShared(sigunguCode, pax)),
+      codes.map((sigunguCode) => fetchPoisShared(sigunguCode, pax, session)),
     );
-  }, [destKey, pax]);
+  }, [destKey, pax, session]);
 
   const { data, loading, error, reload } = useAsync(fetcher);
 
@@ -181,6 +193,20 @@ export function usePoiList({ dests, pax }: UsePoiListArgs): PoiListState {
   useEffect(() => {
     if (pois.length) registerPois(pois);
   }, [pois, registerPois]);
+
+  // 찜 여부를 스토어에 싣는다(하트의 초기 상태). 이미 아는 값은 `hydrate` 가 덮지 않으므로
+  // 방금 토글한 결과가 낡은 목록 응답으로 되돌아가지 않는다.
+  useEffect(() => {
+    if (!data?.length) return;
+    hydrateLikes(
+      data.flatMap((res) =>
+        res.items.map((item) => ({
+          poiId: String(item.contentId),
+          liked: item.liked,
+        })),
+      ),
+    );
+  }, [data, hydrateLikes]);
 
   const ready = useMemo(
     () => (data ?? []).some((res) => res.available),

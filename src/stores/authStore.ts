@@ -40,6 +40,18 @@ function readStoredUserId(): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * 세션 식별 키. 로그아웃(`guest`)·다른 계정 로그인에서 값이 바뀐다.
+ * 401 재발급(`setAuth(token)` 으로 userId 유지)은 키가 그대로다.
+ *
+ * 사용자별 서버 값을 캐시하는 쪽(찜 상태·POI 상세)이 "세션이 바뀌었는가"를 판단하는 기준이라
+ * 여기(인증 상태의 주인)에 둔다 — 각자 authStore 를 들여다보며 같은 규칙을 복제하지 않도록.
+ */
+export function authSessionKey(): string {
+  const { isAuthenticated, userId } = useAuthStore.getState();
+  return isAuthenticated ? `u${userId ?? '?'}` : 'guest';
+}
+
 interface AuthState {
   accessToken: string | null;
   userId: number | null;

@@ -132,7 +132,8 @@ export default function PoiDrawer() {
             <CatBadge cat={poi.cat} />
           </div>
           <div className="absolute bottom-3 right-3.5">
-            <LikeButton poiId={poi.id} size={18} className="btn-sm" />
+            {/* 상세 응답이 총 좋아요 수(`totalLiked`)를 주므로 하트 옆에 함께 보여 준다. */}
+            <LikeButton poiId={poi.id} size={18} className="btn-sm" showCount />
           </div>
         </div>
 
