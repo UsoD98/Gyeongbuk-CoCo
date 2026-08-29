@@ -49,6 +49,15 @@
  F1 코스 시각·체류시간 편집      F2 이동수단 상태화 + 예산 교통비 편집
  F3 수단별 코스 간 이동시간      F4 POI 좋아요 토글 정합성(조사)
  F5 지도 코스 전용 표시(+컬렉션 진입 버그)   F6 지도 DnD(타당성 검토 선행)
+ F7 마커 겹침 도달 불가          F8 지도 크롬 겹침 · 밀집 코스 마커
+ F9 liked/totalLiked/stars 연동
+
+📱 그룹 R · 모바일 UI/UX 개선(2026-08-29 점검, 백엔드·로그인 불필요 — 지금 착수 가능)
+ R1 코스 카드 touch-none 스크롤 불가 🔴   R2 데스크톱·모바일 동시 마운트 🔴
+ R3 탭 전환 시 탐색 상태 전멸 🔴          R4 320px 가로 스크롤 🟠
+ R5 오버레이 스크롤 체이닝·안전영역 🟠    R6 지도가 페이지 스크롤 삼킴 🟠
+ R7 헤더 모바일 메뉴 z-index 🟠           R8 터치 타깃 44px 미만 🟠
+ R9 토스트 위치 🟡  R10 홈 검색바 시각 단서 🟡  R11 폰트·hover·메타 🟡
 ```
 
 **핵심 의존 사슬(반드시 이 순서)**: 생성(1) → 저장/귀속(2) → 목록(3) → 상세(4). "코스를 만들어 저장하고 다시 본다"는 서비스 핵심 루프이며, 이게 서면 5~8은 그 위에 얹힌다.
@@ -331,6 +340,113 @@
 - **검증**: `npm run lint`·`npm run build` 통과 + node 19케이스(별점 병합 7 · 스토어 12 — hydrate 우선순위·토글 확정·낙관/롤백·참조 안정성·세션 전환). ✅ **라이브 실측(실 백엔드 :8080 · dev 5173, 비로그인 범위)**: `GET /poi?sigunguCode=130` 316곳 응답에 `liked`·`stars` 실림(`stars` 는 JSON number, 316곳 중 108곳만 값 있음)·`GET /poi/128677` 에 `liked`·`totalLiked`·`stars` 실림 → **결과 카드의 별점이 API `stars` 와 전건 일치**(별점 없는 POI 는 `★` 자체를 그리지 않음, `★ 0` 0건), 드로어는 `♡ 0`(총개수, `aria-label="찜하기 (좋아요 0개)"`)와 `★ 4.0` 렌더, 목록 hydrate 로 `poiLikeStore.liked` 316키 주입, 비로그인 하트 클릭 → **`찜하려면 로그인` 게이트 · `/like` 요청 0건**, 콘솔 에러 0. ✅ **로그인 E2E 완료(2026-08-29, 사용자가 로그인 대행 · 실 백엔드 :8080 · dev 5173)**: ①로그인 목록 조회가 `liked` 316키 hydrate ②드로어 하트 클릭 → `POST /poi/128677/like` **200 `{liked:true,totalLiked:1}`** → 하트 채워짐·`찜 취소 (좋아요 1개)`·**결과 카드 하트도 동시 반영**(스토어 공유) ③**새로고침 후에도 하트 유지**(재조회 `liked:true` → 추적표 #9 의 목표 달성) ④드로어를 닫았다 다시 열면 **네트워크 요청 0건**(캐시 히트)이고 캐시에 든 낡은 상세(`liked:false`)가 **토글 결과를 되돌리지 않음**(hydrate 비덮어쓰기 규칙 실동작) ⑤해제 → **200 `{liked:false,totalLiked:0}`** → 카드·드로어 동시 해제 ⑥세션 전환: 로그아웃 시 하트 제거(게스트 재조회 `liked:false`) → 재로그인 시 **자동 재조회로 하트 복구** ⑦콘솔 에러 0. 검증 후 서버 상태는 원래대로 되돌려 뒀다(`totalLiked:0`).
 
 ---
+## 📱 그룹 R · 모바일 UI/UX 개선 (2026-08-29 점검)
+
+> **의존: 없음 — 백엔드도 로그인도 필요 없다.** 전부 FE 단독으로 착수·검증 가능하다.
+> **접수 경위**: 사용자 요청("데스크탑/모바일 2가지 반응형으로 구현되어 있는데 모바일 측면에서 UI/UX 개선할 부분이 있을까?")으로 모바일 관점 전수 점검을 수행했다.
+> **점검 방법**: 레이아웃·플래너·오버레이 컴포넌트 정독 + 리스크 패턴 grep(`touch-none` · `vh`/`dvh` · `env(safe-area-*)` · 브레이크포인트 사용 분포 `lg:40 md:15 sm:18 xl:1`) + 마운트 구조 추적.
+> **결론**: 반응형 자체는 mobile-first 로 견고하다(2026-08-08 반응형 전면 점검의 판단은 지금도 유효). 다만 **그 점검 이후 들어온 기능**(지도·DnD·바텀시트·모바일 탭)에서 **모바일에서만 발생하는 결함 15건**이 생겼다. 심각도 3단계로 나눠 11개 Task 로 분해한다.
+> **심각도**: 🔴 심각 = 실제 조작이 막히거나 상태가 유실됨 · 🟠 중요 = 자주 부딪힘 · 🟡 개선 = 폴리시.
+> **권장 순서**: R1 → R2 → R3 → R4 → R5 → R6 → R7 → R8 → R9 → R10 → R11 (심각도 순. R3 은 R2 가 도입하는 `useMediaQuery` 위에, R6 은 R3 이 정리한 탭 렌더 구조 위에 얹힌다).
+> **공통 검증 하니스**: 브라우저 창 리사이즈가 이 환경에서 무효이므로(`innerWidth` 1440 고정), F5·F7 에서 확립한 **동일 출처 iframe 390×731** 하니스로 모바일 폭을 실측한다.
+
+### Step R1 · 코스 카드 `touch-none` 으로 모바일 코스 탭 스크롤 불가 🔴 심각 ▶
+- **의존**: 없음
+- **파일**: `components/planner/CourseItem.tsx`
+- **증상**: `CourseItem.tsx:87` 이 카드 **루트 div** 에 `touch-none` 을 걸어 `touch-action: none` 이 카드 전체에 적용된다. 드래그 핸들은 사진 영역(`setNodeRef` + `listeners`/`attributes` 가 붙은 div)뿐인데도, 모바일 코스 탭에서 카드 위를 세로로 쓸면 브라우저 스크롤이 시작되지 않는다. 카드 사이 `gap-2.5`(10px) 틈으로만 스크롤이 먹으므로 항목이 5~6개면 사실상 스크롤 불가.
+- **내용**: `touch-none` 을 **드래그 핸들 div 로만** 옮긴다(dnd-kit 권장 형태 — `touch-action` 은 포인터를 가로챌 요소에만 건다). `select-none` 은 텍스트 선택 방지 목적이라 루트에 남겨도 무방하지만, 인라인 편집(`input`) 영역에 영향이 없는지 함께 확인한다. `PointerSensor` 의 `activationConstraint: { distance: 6 }` 은 그대로 둔다.
+- **DoD**: 390px 폭 코스 탭에서 **카드 위를 쓸어올려 리스트가 스크롤**되고, 사진 영역을 눌러 끄는 재정렬(같은 Day 안 순서 변경)은 종전대로 동작한다. 데스크톱 코스 패널의 DnD 회귀 없음.
+- **검증**: iframe 390px → 코스 탭 → 항목 6개 이상인 Day 선택 → 카드 중앙에서 세로 스와이프 → `scrollTop` 증가 확인. 이어서 사진 영역 드래그로 1↔3 순서 교체 후 순번 배지 갱신 확인.
+
+### Step R2 · 데스크톱·모바일 트리 동시 마운트 제거 🔴 심각 ▶
+- **의존**: 없음
+- **파일**: `pages/Planner/Planner.tsx`, `hooks/useMediaQuery.ts`(신설), `hooks/usePoiList.ts`
+- **증상**: `Planner.tsx:186`(`hidden flex-col gap-5 lg:flex`)과 `:210`(`flex flex-col gap-4 lg:hidden`)이 **둘 다 렌더된다**. CSS 로만 숨기므로 모바일에서도 데스크톱 쪽 `ResultsPanel`·`MapView`·`CoursePanel`·`BudgetDashboard`·`PlannerDndProvider` 가 살아서 동작한다 → **KakaoMap 인스턴스 2개**(하나는 크기 0 컨테이너에서 초기화 → 잘못된 뷰포트·불필요한 relayout), **POI 중복 조회**, 저사양 안드로이드에서 초기 렌더·메모리 부담. `usePoiList.ts:57` 의 in-flight dedup 주석이 *"Planner 는 데스크톱·모바일 ResultsPanel 을 동시에 마운트하고…"* 라고 **이미 이 사실을 인정하고 증상만** 막고 있다.
+- **내용**: `hooks/useMediaQuery.ts` 신설(`matchMedia` 구독 + `useSyncExternalStore`, SSR 이 없으므로 초기값은 즉시 평가). `Planner` 가 `const isDesktop = useMediaQuery('(min-width: 1024px)')` 로 **한쪽 트리만 마운트**한다. 브레이크포인트 값은 Tailwind `lg`(1024px)와 반드시 일치시키고 상수로 뽑아 한 곳에서 관리한다.
+- **DoD**: 모바일 폭에서 KakaoMap 인스턴스가 **1개**, `GET /poi` 가 **1회**. 폭을 넘나들며 리사이즈해도 지도·패널이 정상 전환되고 콘솔 에러 0. `usePoiList` 의 in-flight dedup 은 **StrictMode 이중 effect 대비로 여전히 유효**하므로 존치하되, 주석의 "동시 마운트" 근거는 갱신한다.
+- **검증**: iframe 390px 진입 → 네트워크 패널로 `GET /poi` 1회·KakaoMap 초기화 1회 확인. 이어 1280px 로 전환 → 데스크톱 3분할 정상 렌더.
+- **⚠️ 주의**: 트리 교체는 컴포넌트 로컬 state 초기화를 동반한다. R3 과 함께 설계해 폭 전환 시에도 **스토어 상태**(`plannerStore` 의 활성 Day·드로어 등)는 유지되도록 하고, 로컬 state 만 사라진다는 점을 명시한다.
+
+### Step R3 · 모바일 탭 전환 시 탐색 상태 전멸 🔴 심각 ▶
+- **의존**: R2
+- **파일**: `pages/Planner/Planner.tsx`, `components/planner/ResultsPanel.tsx`
+- **증상**: `Planner.tsx:232-241` 이 `{tab === 'results' && <ResultsPanel mobile />}` 형태의 **조건부 렌더**라 탭을 떠나는 순간 언마운트된다. `ResultsPanel` 의 로컬 state 가 전부 초기화된다 — `viewMode`→`'map'` · `courseOnly`→`true` · `cat`→`'all'` · `limit`→`60` · 스크롤 위치 · 지도 줌/팬. 리스트로 바꿔 '더 보기'를 3번 눌러 180개를 본 뒤 코스 탭에 갔다 오면 **다시 지도·60개·맨 위**다. 모바일은 탭 왕복이 잦아 체감이 크다.
+- **내용**: 세 패널을 **모두 마운트**하고 `hidden`(또는 `el.hidden`)으로 전환한다. 지도 컨테이너가 `display:none` 이었다가 보일 때 카카오맵은 크기를 다시 읽어야 하므로, 탭 복귀 시 `map.relayout()` 을 호출한다(`KakaoMap` 에 노출 시점 훅 또는 `ResizeObserver`). 대안으로 해당 state 를 `plannerStore` 로 승격해도 되지만, 스크롤·지도 뷰포트까지 살리려면 **마운트 유지 쪽이 단순**하다.
+- **DoD**: 결과↔코스↔예산을 왕복해도 ①뷰모드 ②카테고리 칩 ③'더 보기' 누적 개수 ④리스트 스크롤 위치 ⑤지도 줌·중심이 유지된다. 탭 복귀 시 지도가 잘리거나 회색으로 남지 않는다.
+- **검증**: iframe 390px → 결과 탭에서 리스트 전환 + `음식점` 칩 + '더 보기' 2회 + 중간까지 스크롤 → 코스 탭 → 예산 탭 → 결과 탭 복귀 → 5개 항목 전부 유지 확인. 지도 모드에서도 줌 3단계 확대 후 왕복 → 같은 뷰포트.
+
+### Step R4 · 320px 기기 가로 스크롤(`min-w-90`) 🟠 중요 ▶
+- **의존**: 없음
+- **파일**: `components/layout/Layout.tsx`, (넘침이 드러나는 곳) `components/planner/BudgetDashboard.tsx` 등
+- **증상**: `Layout.tsx:25` 의 `min-w-90`(=22.5rem=360px)이 `px-4` 와 함께 걸려 있어 뷰포트가 360px 미만이면 **페이지 전체가 가로로 밀린다**. iPhone SE 1세대·갤럭시 폴드 접힘 상태(320px)에서 재현. 주석은 "모바일에서도 레이아웃이 깨지지 않도록"이라 되어 있으나, 실제로는 깨짐을 막는 대신 **가로 스크롤로 바꿔 놓은** 것이다.
+- **내용**: `min-w-90`/`lg:min-w-90` 을 제거하고, 좁은 폭에서 실제로 넘치는 요소를 개별 처리한다 — flex 자식에 `min-w-0`, 예산 교통 행(수단 select + 배지 + 금액 + 되돌리기)은 이미 `flex-wrap` 이 있으니 확인만, 긴 텍스트는 `truncate`/`break-words`.
+- **DoD**: 320px 폭에서 `document.documentElement.scrollWidth <= clientWidth`(가로 스크롤 0)이고, 주요 화면(홈·플래너 3탭·컬렉션·공유·로그인)에서 겹침·잘림이 없다.
+- **검증**: iframe 320×640 하니스로 각 화면 진입 → `scrollWidth`/`clientWidth` 비교 + 스크린샷 육안 확인.
+
+### Step R5 · 오버레이 스크롤 체이닝 + 하단 안전영역 🟠 중요 ▶
+- **의존**: 없음
+- **파일**: `components/planner/PoiDrawer.tsx`, `components/common/ConfirmDialog.tsx`, `components/planner/LoginGateModal.tsx`, `hooks/useBodyScrollLock.ts`(신설), `index.html`, `src/index.css`
+- **증상**: ①세 오버레이 모두 **body 스크롤 락이 없고** 스크롤 컨테이너에 `overscroll-behavior: contain` 이 없다 → 바텀시트 내용을 끝까지 스크롤하면 뒤 페이지가 따라 움직이고, 닫으면 엉뚱한 위치에 있다(iOS 에서 특히 두드러짐). ②프로젝트 전체에 `env(safe-area-inset-*)` 사용이 **0건** → `PoiDrawer` 하단 액션 바(`닫기` / `Day N에 추가`)가 iOS 홈 인디케이터에 물린다. ③바텀시트에 grabber(핸들 바)도 스와이프 다운 닫기도 없어, 사진 위 X 버튼이 유일한 닫기 수단이다.
+- **내용**: `useBodyScrollLock(open)` 훅 신설(열릴 때 `body` 스크롤 잠금 + 닫힘/언마운트 시 복원, 중첩 오버레이 카운팅). 드로어 본문 스크롤 컨테이너에 `overscroll-contain`. `index.html` viewport 에 `viewport-fit=cover` 추가 후 하단 액션 바에 `pb-[max(1rem,env(safe-area-inset-bottom))]`. 바텀시트 상단에 4px 회색 grabber 추가(장식이 아니라 "여기가 시트 상단"이라는 단서). 스와이프 다운 닫기는 **선택 범위** — 구현 난도 대비 효용을 착수 시 판단해 기록한다.
+- **DoD**: 오버레이가 열린 동안 배경이 스크롤되지 않고 닫으면 원래 스크롤 위치로 돌아온다. 하단 액션 바가 홈 인디케이터에 가리지 않는다. 바텀시트에 grabber 가 보인다. 세 오버레이 모두 기존 a11y(role/aria-modal/Escape/오버레이 클릭)는 유지.
+- **검증**: iframe 390px → POI 드로어 열고 본문 끝까지 스크롤 → 배경 `window.scrollY` 불변 확인 → 닫은 뒤 원위치. `ConfirmDialog`(코스 삭제)·`LoginGateModal`(비로그인 저장)도 같은 확인.
+
+### Step R6 · 지도가 페이지 스크롤을 삼킴 🟠 중요 ▶
+- **의존**: R3
+- **파일**: `components/planner/ResultsPanel.tsx`, `components/planner/parts/KakaoMap.tsx`
+- **증상**: 모바일 결과 탭 기본값이 지도(`ResultsPanel.tsx:79 viewMode='map'`)이고 `Planner.tsx:231` 의 `h-[70vh]` 카드가 화면 대부분을 차지한다. 지도 위 세로 스와이프가 전부 kakao 의 pan 으로 먹혀 **아래 예산 탭·푸터로 내려갈 수 없다**.
+- **내용**: 모바일에서 지도를 기본 비드래그로 두고(`map.setDraggable(false)`), "지도 조작" 오버레이를 한 번 탭하면 활성화하는 방식(구글맵 임베드 관례)이 1안. 2안은 모바일 기본 뷰모드를 `'list'` 로 바꾸는 것 — 다만 F5 에서 *"코스를 만들고 들어오면 가장 먼저 보고 싶은 것은 내 일정이 어떻게 이어지는가"* 라는 근거로 지도를 기본으로 정했으므로 **그 결정을 뒤집는 것은 사용자 판단 사항**이다. 착수 시 1안을 우선 제안한다.
+- **DoD**: 390px 폭에서 지도 영역 위 세로 스와이프로 **페이지를 푸터까지 내릴 수 있고**, 의도적으로 지도를 조작하는 경로가 남아 있으며, 마커 탭(상세 열기)·토글(담기/빼기)은 활성화 전에도 종전대로 동작한다(F6·F7·F8 회귀 없음).
+- **검증**: iframe 390px → 결과 탭(지도) → 지도 중앙에서 위로 스와이프 → `window.scrollY` 증가 확인. 오버레이 탭 후 pan·줌 동작 확인. 마커 토글 도달 가능성은 F7/F8 하니스 재실행으로 회귀 확인.
+
+### Step R7 · 헤더 모바일 메뉴 z-index 누락 🟠 중요 ▶
+- **의존**: 없음
+- **파일**: `components/layout/HeaderLayout.tsx`, `src/index.css`
+- **증상**: `HeaderLayout.tsx:148` 의 모바일 드롭다운이 `absolute top-full left-0 right-0` 인데 **z-index 가 없다**. `index.css:24` 의 `.navbar { position: relative }` 에도 z 가 없어 스택 컨텍스트 우위가 없다 → `main` 안의 positioned 요소(홈 검색바 드롭다운 `z-10`, POI 카드 `relative` 배지 등)가 메뉴 위로 올라온다.
+- **내용**: `.navbar` 에 `z-30`(또는 헤더 래퍼에 Tailwind 클래스), 모바일 메뉴에 `z-20`. 프로젝트에 이미 쓰이는 z 계층(드로어 `40/50` · 다이얼로그 `60/70` · 토스트 `50`)과 충돌하지 않게 **헤더는 오버레이보다 아래**로 둔다. 겸사겸사 z 계층을 `index.css` 주석 한 줄로 문서화한다.
+- **DoD**: 홈·플래너(3탭 각각)·컬렉션·공유 화면에서 버거 메뉴를 열면 메뉴가 항상 최상단에 온전히 보이고, 열린 상태에서 오버레이(드로어·모달·토스트)를 띄우면 오버레이가 메뉴 위에 온다.
+- **검증**: iframe 390px → 각 화면에서 메뉴 열고 `elementFromPoint(메뉴 항목 중심)` 이 그 항목인지 확인.
+
+### Step R8 · 터치 타깃 44px 미만 정비 🟠 중요 ▶
+- **의존**: 없음
+- **파일**: `src/index.css`, `components/planner/LikeButton.tsx`, `pages/Index.tsx`, `pages/Collection/Collection.tsx`, `components/planner/parts/markerStyle.ts`, `components/planner/CourseItem.tsx`
+- **증상**(6곳):
+  1. **`index.css:21` `.btn-circle { width: 24px; }` 전역 override** — daisyUI 원형 버튼 전체를 24px 로 줄인다. 여기에 찜 하트(`LikeButton` 의 `btn-circle`)가 걸려 **24×32 로 찌그러진** 채 렌더되고 오탭을 유발한다. 이 규칙이 왜 생겼는지 근거가 없으므로 **제거 우선, 회귀 발견 시 범위 축소**.
+  2. 홈 인원 조절 `−`/`+` (`rounded p-1` + 16px 아이콘 ≈ 24px)
+  3. 컬렉션 카드 삭제 버튼 (`btn-sm btn-square` 32px, **탭 가능한 카드 위에 겹쳐** 있어 오탭 시 삭제 확인 다이얼로그)
+  4. 지도 마커 토글 22px (`markerStyle.ts:39` — 주석은 "터치 목표 확보"라 하지만 22px 는 기준 미달)
+  5. 코스 카드 시각 편집 트리거 (`text-xs` 한 줄, 높이 ≈16px)
+  6. 코스 카드 금액 편집 트리거 (동일)
+- **내용**: 각각 `min-h-11 min-w-11`(44px) 확보. 시각적 크기를 키우기 곤란한 곳(마커 토글·인라인 편집 칩)은 **투명 히트박스 확장**(`relative` + `before:absolute before:-inset-2`)으로 처리해 디자인을 유지한다. 마커 토글은 히트박스를 키우면 겹침 판정(`mapCluster` 의 `minSeparationPx`)에 영향을 주므로 **F7/F8 시뮬레이터를 재실행해 회귀를 확인**한다.
+- **DoD**: 위 6곳의 실측 히트박스가 44×44px 이상. `.btn-circle` 전역 override 제거(또는 근거와 함께 범위 축소). F7/F8 의 도달 가능성 검증 통과 유지.
+- **검증**: iframe 390px 에서 각 요소의 `getBoundingClientRect()`(+ 가상 요소 히트박스는 `elementFromPoint` 로 모서리 4점 판정). 마커 토글 변경 시 `mapCluster` node 테스트 + 앱 줌 흐름 스윕 재실행.
+
+### Step R9 · 토스트 위치 🟡 개선 ▶
+- **의존**: 없음
+- **파일**: `components/common/Toaster.tsx`
+- **증상**: `Toaster.tsx:16` 이 `toast toast-top toast-end` 고정이라 모바일에서 헤더 우측(계정 메뉴·테마 토글) 위를 덮고, 엄지에서 가장 먼 자리다. 토스트가 **클릭으로 닫히는** 구조(`<button>`)라 도달성이 특히 중요하다.
+- **내용**: `toast-bottom toast-center sm:toast-top sm:toast-end` 로 폭에 따라 분기. 하단이면 안전영역도 함께(`pb-[env(safe-area-inset-bottom)]` — R5 와 규칙 공유).
+- **DoD**: 390px 에서 토스트가 하단 중앙에 뜨고 헤더를 가리지 않으며, 640px 이상에서는 종전대로 우상단. 여러 개가 쌓여도 하단 버튼(예: 드로어 액션 바)을 영구히 가리지 않는다.
+- **검증**: iframe 390px → 코스 저장/삭제 등으로 success·error·info 각각 띄워 위치·중첩 확인.
+
+### Step R10 · 홈 검색바 모바일 시각 단서 + DatePicker 🟡 개선 ▶
+- **의존**: 없음
+- **파일**: `pages/Index.tsx`, `src/index.css`
+- **증상**: ①`Index.tsx` 의 목적지·일정·이동수단·테마 트리거가 `border-base-100 bg-base-100`(테두리·배경이 카드와 동일)에 `text-xs` 다. 데스크톱은 `w-px` 구분선이 칸을 나눠 주지만 그 구분선이 **`hidden lg:block` 이라 모바일에서만 사라진다** → 5개 필드가 "눌러야 할 곳"이라는 단서 없이 텍스트 목록처럼 세로로 붙어 보인다. ②`react-datepicker` 기본 팝오버는 셀이 작고 좁은 화면에서 좌우로 잘릴 수 있다.
+- **내용**: 모바일에서 각 칸에 `border-base-300 rounded-xl min-h-12`(+`px-3`) 부여해 입력 컨트롤로 읽히게 한다(데스크톱 알약형 검색바는 현행 유지 — 2026-08-08 에 다듬은 결과물이므로 건드리지 않는다). DatePicker 는 모바일에서 `withPortal` + 셀 크기 확대(`.custom-datepicker-calendar` 훅이 이미 `index.css` 에 있다). 2026-08-08 에 도입한 `DateTrigger`(`MM/dd ~ MM/dd` 축약)는 그대로 둔다.
+- **DoD**: 390px 폭에서 5개 칸이 각각 눌러야 할 컨트롤로 식별되고(테두리 + 최소 높이 48px), 달력이 화면 안에 온전히 들어오며 날짜 셀이 손가락으로 눌린다. 데스크톱 검색바 회귀 없음.
+- **검증**: iframe 390px → 각 칸 탭 → 드롭다운/달력 열림 + 화면 밖으로 나가지 않는지. 1280px 에서 알약형 검색바 스크린샷 비교.
+
+### Step R11 · 폰트 700 · hover 고착 · 메타 태그 🟡 개선 ▶
+- **의존**: 없음
+- **파일**: `src/index.css`, `index.html`, `components/planner/POICard.tsx`, `pages/Collection/Collection.tsx`
+- **증상**: ①`index.css` 의 `@font-face` 가 Pretendard **Regular(400) 하나만** 로드하는데 UI 전반이 `font-bold`(700)·`font-extrabold`(800)를 쓴다 → 브라우저 합성 볼드로 저해상도 모바일에서 뭉갠다. ②POI 카드·컬렉션 카드의 `hover:-translate-y-0.5 hover:shadow-md` 가 터치 후 고착되고, 반대로 `active:` 눌림 피드백은 없다. ③`index.html` 에 `theme-color`(모바일 브라우저 크롬을 헤더 teal 과 통일)·`description`·공유 링크(`/share/:courseId`)용 OG 태그가 없다 — **카카오 공유(S7·GBC014)가 핵심 기능**이라 특히 아쉽다.
+- **내용**: ①Pretendard 700 woff2 `@font-face` 추가(`font-display: swap` 유지). 800 은 실제 사용처 대비 비용을 보고 판단. ②`@media (hover: hover)` 로 hover 효과를 감싸고 `active:scale-[0.98]` 추가. ③`index.html` 에 `theme-color`(라이트/다크 `prefers-color-scheme` 분기)·`description`·기본 OG 태그. **공유 링크의 코스별 OG 는 SPA 라 정적 태그로는 불가** — 카카오 공유는 `kakaoShare` 의 feed 템플릿이 자체 이미지·제목을 싣고 있으므로 그 경로를 우선 확인하고, 정적 OG 는 서비스 기본값으로만 둔다(이 한계를 문서에 남긴다).
+- **DoD**: DevTools Network 에 700 woff2 가 실제로 로드되고 합성 볼드가 사라진다. 카드 탭 후 hover 잔상이 없고 누르는 동안 축소 피드백이 있다. 모바일 브라우저 주소창 색이 헤더와 맞는다.
+- **검증**: iframe 390px → `document.fonts.check('700 16px Pretendard')` · 카드 탭 후 `getComputedStyle(card).transform` 이 `none` 으로 복귀 · `<meta name="theme-color">` 존재 확인.
+
+---
+
 ## 부록 A · 정리 (선택 — 메인 스파인과 무관, 아무 때나)
 
 > API 연동과 독립. 여유 있을 때 또는 관련 화면 손볼 때 함께.
@@ -350,4 +466,5 @@
 2. **메인 담당**은 Step 1→2→3→4(핵심 루프)를 순서대로, 이어서 5→6→7.
 3. **여력이 있으면** 섬 M(마이페이지)·섬 P(P0·P1)를 병렬로 당긴다.
 4. **⏸ 배지**(Step 8, P2, P3)는 백엔드 완료를 기다린다. Step 0-A 계약 4건은 착수 시 확인 요청하되 막히면 스펙 가정으로 진행하고 추적표를 남긴다.
-5. **그룹 F**(사용자 피드백)는 S1~S8·P1·P2 가 끝난 뒤 F1→F2→F3→F4→F5→F6 순으로 진행한다. F1·F2 는 GBC020 영속 범위(백엔드 `{schedule}` 바디) 확인이, F4 는 로그인 세션 실측(사용자 대행)이 선행 조건이다.
+5. **그룹 F**(사용자 피드백)는 S1~S8·P1·P2 가 끝난 뒤 F1→F2→F3→F4→F5→F6→F7→F8→F9 순으로 진행한다. F1·F2 는 GBC020 영속 범위(백엔드 `{schedule}` 바디) 확인이, F4 는 로그인 세션 실측(사용자 대행)이 선행 조건이다.
+6. **📱 그룹 R**(모바일 UI/UX)은 **백엔드도 로그인도 필요 없어 지금 바로 착수 가능한 유일한 그룹**이다. R1→R11 을 심각도 순으로 진행하되, 🔴 심각 3건(R1·R2·R3)은 실제 조작이 막히거나 상태가 유실되는 결함이므로 **다른 무엇보다 먼저** 처리한다. 검증은 동일 출처 iframe 390×731(및 R4 는 320×640) 하니스로 한다.
