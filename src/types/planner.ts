@@ -23,7 +23,9 @@ export interface Poi {
   hours: string;
   /** 코스 일정상의 방문 시각('HH:mm'). 코스에 편성된 장소만 갖는다(운영시간과 별개). */
   visitTime?: string;
+  /** 별점(GBC017/018 `stars`, 0~5·소수 1자리). **0 = 평점 없음** → 표시를 생략한다. */
   rating: number;
+  /** 리뷰 수. 백엔드에 대응 필드가 없어 항상 0(= 정보 없음)이다. */
   reviews: number;
   /** 지도 플레이스홀더 위 좌표(%). 카카오맵을 못 띄울 때 쓰는 폴백 지도 전용. */
   x: number;

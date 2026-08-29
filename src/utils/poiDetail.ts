@@ -36,7 +36,8 @@ function coordOf(detail: PoiDetail): { lat?: number; lng?: number } {
 
 /**
  * 어느 레지스트리에도 없는 POI(카탈로그를 안 불러온 지역의 코스 장소 등)를 상세만으로 그린다.
- * 코스·목록이 채우던 칸(방문 시각·비용·테마·평점)은 알 수 없으므로 기본값이다.
+ * 코스·목록이 채우던 칸(방문 시각·비용·테마)은 알 수 없으므로 기본값이다.
+ * 별점은 상세에도 실려 오므로(백엔드 0.6.7) 여기서 채운다 — 데이터가 없으면 0(= 평점 없음).
  */
 export function poiFromDetail(detail: PoiDetail): Poi {
   const { lat, lng } = coordOf(detail);
@@ -50,7 +51,7 @@ export function poiFromDetail(detail: PoiDetail): Poi {
     price: 0,
     priceNote: '가격 미정',
     hours: hoursFromInfo(detail),
-    rating: 0,
+    rating: detail.stars ?? 0,
     reviews: 0,
     x: 50,
     y: 50,
@@ -85,6 +86,8 @@ export function withDetail(
     ...poi,
     name: nameIsPlaceholder || !poi.name ? detail.title : poi.name,
     hours: poi.hours || hoursFromInfo(detail),
+    // 별점(0.6.7)은 목록·상세가 같은 `poi_rating.stars` 라 값이 같다 → 빈 칸(0)만 채운다.
+    rating: poi.rating || (detail.stars ?? 0),
     imageUrl: poi.imageUrl ?? imageOf(detail),
     lat: hasOwnCoord ? poi.lat : lat,
     lng: hasOwnCoord ? poi.lng : lng,

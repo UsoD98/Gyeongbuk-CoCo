@@ -320,6 +320,17 @@
 - **남은 것**: ㉡ 미착수(“위치 왜곡 < 겹침” 설계 결정을 뒤집을지 판단 필요) · 합성 드래그로 만든 상태에서 컨트롤 겹침 1건이 관찰돼 **실제 제스처로 재확인** 필요 · 폴백 지도(`PlaceholderMap`)는 겹침 해소 경로 자체가 없어 이번 수정 범위 밖이다(SDK 실패 시에만 뜨는 화면).
 
 ---
+### Step F9 · 찜 상태(`liked`)·좋아요 수(`totalLiked`)·별점(`stars`) 연동 ✅ FE 완료 (2026-08-29 사용자 요청)
+- **의존**: P1(GBC019 토글)·P2(GBC017 목록)·P3(GBC018 상세) — 전부 완료 상태에서 착수.
+- **파일**: `api/poi.ts`, `stores/poiLikeStore.ts`, `stores/authStore.ts`, `hooks/usePoiList.ts`, `hooks/usePoi.ts`, `hooks/usePoiLike.ts`, `utils/poiDetail.ts`, `types/planner.ts`, `components/planner/LikeButton.tsx`, `components/planner/parts/Stars.tsx`, `components/planner/PoiDrawer.tsx`
+- **접수 원문**: ①"GBC019 - 프론트 좋아요 수정 시, 반환값 contentId 정보에 반영 (좋아요, 좋아요 개수)" ②"GBC017, GBC018 liked, totalLiked, stars(별점) 데이터 필드 프론트 구현"
+- **백엔드 계약(소스 실측 `a856895`/0.6.8)**: 목록 `PoiCurationItemDto` = `liked`·`stars`(총개수 **없음**) · 상세 `PoiDetailResponseDto` = `liked`·`totalLiked`·`stars` · 토글 `PoiLikeResponseDto` = `{liked, totalLiked}`(**0.6.5 에서 `likes` 개명**). 조회 2종은 `permitAll` → 비로그인·탈퇴는 `liked:false`, 평점 행 없으면 `stars:null`·`totalLiked:0`. 추적표 #9.
+- **착수 시 발견한 실결함**: FE 가 개명을 따라가지 못해 `usePoiLike` 가 없는 필드(`res.likes`)를 읽고 있었다 → 토글 후 **좋아요 수가 `undefined`** 로 유실.
+- **구현**: ①타입 3종 실측 1:1 갱신. ②`poiLikeStore` = `{liked, totalLiked}` 2맵 + `hydrate()` — **이미 아는 값은 덮지 않는다**(필드 단위). 목록·상세 응답은 오래 머무는 캐시라, 덮어쓰면 방금 토글한 결과가 낡은 값으로 되돌아간다. ③`usePoiList`·`usePoi` 가 응답을 hydrate 하고 **세션 키를 조회 dedup 키·상세 캐시 키에 포함**(`authSessionKey()` 를 `authStore` 로 승격) — `liked` 는 사용자별 값이라 로그인 전후 응답을 공유·재사용하면 하트가 거짓이 되고, 세션이 바뀌면 자동 재조회된다. ④`usePoiLike` 는 토글 응답을 그대로 확정(재조회 없음 — 백엔드가 필드명을 통일한 이유). ⑤`stars` → `Poi.rating`(`withDetail` 은 빈 칸만 채움), **`Stars` 는 0이면 렌더하지 않는다**(실 POI 카드의 `★ 0` 제거). ⑥`LikeButton showCount` 는 **드로어에서만** — 목록 응답에 총개수가 없어 카드에 붙이면 값이 들쭉날쭉해진다.
+- **DoD**: 로그인 상태에서 ⓐ목록·상세 진입 시 이미 찜한 POI 의 하트가 채워져 보임 ⓑ토글 즉시 하트·개수 갱신 ⓒ드로어 재오픈(캐시)에도 유지 ⓓ새로고침 후 목록·상세 조회로 서버 상태 복구 ⓔ별점 있는 POI 만 `★` 표시.
+- **검증**: `npm run lint`·`npm run build` 통과 + node 19케이스(별점 병합 7 · 스토어 12 — hydrate 우선순위·토글 확정·낙관/롤백·참조 안정성·세션 전환). ✅ **라이브 실측(실 백엔드 :8080 · dev 5173, 비로그인 범위)**: `GET /poi?sigunguCode=130` 316곳 응답에 `liked`·`stars` 실림(`stars` 는 JSON number, 316곳 중 108곳만 값 있음)·`GET /poi/128677` 에 `liked`·`totalLiked`·`stars` 실림 → **결과 카드의 별점이 API `stars` 와 전건 일치**(별점 없는 POI 는 `★` 자체를 그리지 않음, `★ 0` 0건), 드로어는 `♡ 0`(총개수, `aria-label="찜하기 (좋아요 0개)"`)와 `★ 4.0` 렌더, 목록 hydrate 로 `poiLikeStore.liked` 316키 주입, 비로그인 하트 클릭 → **`찜하려면 로그인` 게이트 · `/like` 요청 0건**, 콘솔 에러 0. ⏳ **남은 것**: 로그인 상태의 왕복(찜한 POI 의 하트가 채워져 보이는지 · 토글 후 개수 증감 · 새로고침 후 유지)은 조직 지침상 에이전트가 비밀번호를 입력할 수 없어 **사용자 대행**.
+
+---
 ## 부록 A · 정리 (선택 — 메인 스파인과 무관, 아무 때나)
 
 > API 연동과 독립. 여유 있을 때 또는 관련 화면 손볼 때 함께.

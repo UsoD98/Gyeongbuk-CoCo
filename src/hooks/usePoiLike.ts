@@ -15,14 +15,18 @@ import { toast } from '@/stores/toastStore.ts';
  *  - 낙관적 업데이트: 클릭 즉시 스토어 상태를 뒤집고, 실패 시 이전 값으로 롤백 + 에러 토스트.
  *  - 서버 호출은 **실 contentId(양수 정수)** 일 때만 한다. 목 POI(슬러그 id)는 실 contentId 가
  *    없어 로컬 상태만 반영한다 — 실동작(서버 반영·재조회 유지) 검증은 POI 실데이터(P2/P3) 이후.
+ *  - 응답(`{liked, totalLiked}`)을 그대로 스토어에 확정한다 — 조회 응답과 필드가 같아
+ *    재조회 없이 그 contentId 의 찜 여부·좋아요 수가 카드·드로어 양쪽에서 갱신된다(백엔드 0.6.5).
  *  - 응답 `liked` 가 낙관적 기대와 다르면 서버 진실을 따르고 그 사실을 toast 로 알린다.
- *    찜 상태 조회 API 가 없어(계약 추적표 #9) 새로고침 후 하트는 항상 미찜으로 시작하므로,
- *    그 상태에서 누른 클릭이 실제로는 '해제'가 되는 경우를 사용자가 알 수 있어야 한다.
+ *    조회가 `liked` 를 실어 주게 됐어도(0.6.4) 목록을 부르지 않은 POI·다른 기기에서 바뀐 경우가
+ *    남아 있어, 그 클릭이 실제로는 '해제'였다는 걸 사용자가 알 수 있어야 한다.
  *
- * 컴포넌트(`LikeButton`)는 `{ liked, pending, toggle }` 만 소비한다.
+ * 컴포넌트(`LikeButton`)는 `{ liked, totalLiked, pending, toggle }` 을 소비한다.
  */
 export interface PoiLike {
   liked: boolean;
+  /** 총 좋아요 수. 아직 모르면(목록만 본 POI) undefined — 개수 표시를 생략한다. */
+  totalLiked: number | undefined;
   /** 서버 요청 진행 중(버튼 비활성화용) */
   pending: boolean;
   toggle: () => void;
@@ -30,6 +34,7 @@ export interface PoiLike {
 
 export function usePoiLike(poiId: string): PoiLike {
   const liked = usePoiLikeStore((s) => s.liked[poiId] ?? false);
+  const totalLiked = usePoiLikeStore((s) => s.totalLiked[poiId]);
   const setLiked = usePoiLikeStore((s) => s.setLiked);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const openGate = useLoginGateStore((s) => s.openGate);
@@ -54,11 +59,11 @@ export function usePoiLike(poiId: string): PoiLike {
     setPending(true);
     void togglePoiLike(contentId)
       .then((res) => {
-        setLiked(poiId, res.liked, res.likes); // 서버 진실로 확정
+        setLiked(poiId, res.liked, res.totalLiked); // 서버 진실(찜 여부·총 개수)로 확정
         if (res.liked !== next) {
           // 서버가 우리 기대와 반대를 돌려줬다 = 우리가 알던 찜 상태가 낡았다.
-          // 찜 상태를 되돌려주는 조회 API 가 없어(계약 추적표 #9) 새로고침 후엔 항상
-          // 미찜으로 보이므로, 그 클릭이 실제로는 '해제'였다는 걸 사용자에게 알려준다.
+          // 조회 응답이 `liked` 를 주게 됐어도(0.6.4) 목록을 거치지 않은 POI·다른 기기에서
+          // 바뀐 경우가 남으므로, 그 클릭이 실제로는 '해제'였다는 걸 알려준다.
           toast.info(
             res.liked
               ? '찜에 추가했어요'
@@ -75,5 +80,5 @@ export function usePoiLike(poiId: string): PoiLike {
       });
   }, [isAuthenticated, openGate, pending, poiId, setLiked]);
 
-  return { liked, pending, toggle };
+  return { liked, totalLiked, pending, toggle };
 }

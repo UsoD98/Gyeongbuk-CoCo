@@ -80,6 +80,17 @@ export interface PoiSummary {
   thumbnail: string | null;
   /** 1인 평균 가격. ⚠️ 현재 백엔드가 항상 null(근거 테이블 소실, BOQ14). */
   avgPrice: number | null;
+  /**
+   * 로그인 사용자의 찜 여부(백엔드 0.6.4, `user_poi_like` 기준).
+   * 이 API 는 permitAll 이라 **비로그인·탈퇴 사용자면 예외 없이 `false`** 로 온다.
+   * ⚠️ 목록에는 총 좋아요 수(`totalLiked`)가 **없다** — 상세(GBC018)에만 있다.
+   */
+  liked: boolean;
+  /**
+   * 별점(백엔드 0.6.7, `poi_rating.stars` = `DECIMAL(3,1)`).
+   * 평점 행이 없거나 아직 입력되지 않은 POI 는 `null`(에러 아님).
+   */
+  stars: number | null;
 }
 
 /** GET /poi 응답 봉투 안쪽 (GBC017) — 백엔드 `PoiCurationResponseDto` 1:1. */
@@ -135,16 +146,24 @@ export interface PoiDetail {
   avgPrice: number | null;
   /** 부가정보 쌍. 없으면 빈 배열(백엔드가 `List.of()` 로 보장). */
   infoList: PoiInfoItem[];
+  /** 로그인 사용자의 찜 여부(백엔드 0.6.4). 비로그인이면 `false`. */
+  liked: boolean;
+  /** 총 좋아요 수(백엔드 0.6.4, `poi_rating.likes`). 평점 행이 없으면 `0`. */
+  totalLiked: number;
+  /** 별점(백엔드 0.6.7). 데이터가 없으면 `null`. */
+  stars: number | null;
 }
 
 /**
  * POI 좋아요 토글 응답 (GBC019 POST /poi/{contentId}/like).
- * 백엔드 `PoiLikeResponseDto`와 일치(실측). GBC019는 스펙 `완료`라 잠정 아님.
+ * 백엔드 `PoiLikeResponseDto` 와 일치(실측).
+ * ⚠️ 백엔드 0.6.5 에서 총개수 필드명이 `likes` → **`totalLiked`** 로 바뀌었다(조회 응답과 통일).
+ *    필드명이 같아져 **재조회 없이** 이 응답으로 목록·상세의 `liked`/`totalLiked` 를 그대로 갱신한다.
  */
 export interface TogglePoiLikeResponse {
   liked: boolean;
-  /** 해당 POI의 총 좋아요 수 */
-  likes: number;
+  /** 해당 POI 의 총 좋아요 수(`poi_rating.likes`). */
+  totalLiked: number;
 }
 
 // ── API 함수 ───────────────────────────────────────────────
@@ -173,7 +192,7 @@ export async function getPoi(contentId: number): Promise<PoiDetail> {
 
 /**
  * POST /poi/{contentId}/like — POI 좋아요 토글 (GBC019). 로그인 필수(Bearer).
- * 응답 data 는 `{ liked, likes }`(백엔드 `PoiLikeResponseDto` 실측). 스펙 `완료`.
+ * 응답 data 는 `{ liked, totalLiked }`(백엔드 0.6.5 실측). 스펙 `완료`.
  * ⚠️ `contentId` 는 실 TourAPI 콘텐츠 id(양수). 목 POI(슬러그 id)에는 실 contentId 가 없어
  *    호출부(`usePoiLike`)에서 서버 호출을 건너뛴다 — 실동작은 POI 실데이터(P2/P3) 이후 완결.
  */
