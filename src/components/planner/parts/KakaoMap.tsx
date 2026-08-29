@@ -3,15 +3,18 @@ import { Minus, Navigation, Plus } from 'lucide-react';
 
 import {
   DEFAULT_MIN_SEPARATION_PX,
+  anchorKeepOut,
   clusterMarkers,
   spreadOverlaps,
 } from '@/components/planner/mapCluster.ts';
 import type {
   ClusterScale,
   Displacement,
+  ForbiddenBox,
   MarkerCluster,
   OverlapItem,
   PlacedMarker,
+  ScreenRect,
 } from '@/components/planner/mapCluster.ts';
 import { hasLatLng } from '@/components/planner/mapModel.ts';
 import type { MapMarker } from '@/components/planner/mapModel.ts';
@@ -66,6 +69,7 @@ export default function KakaoMap({
   onFail: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
   const mapsRef = useRef<KakaoMaps | null>(null);
   const mapRef = useRef<KakaoMapInstance | null>(null);
   const overlaysRef = useRef(new Map<string, OverlayEntry>());
@@ -73,6 +77,11 @@ export default function KakaoMap({
   const [ready, setReady] = useState(false);
   // 화면 1도당 픽셀(클러스터 판정 배율). 줌이 바뀔 때만 갱신된다 — 겹침은 줌에만 의존한다.
   const [scale, setScale] = useState<ClusterScale | null>(null);
+  /**
+   * 마커 앵커를 두면 안 되는 자리(F8 ㉠ — 확대·축소·현위치 컨트롤이 덮는 영역).
+   * 배율과 달리 **이동(pan)만으로도 바뀌므로** `idle` 마다 다시 읽는다.
+   */
+  const [forbidden, setForbidden] = useState<ForbiddenBox[]>(NO_FORBIDDEN);
 
   // 최신 콜백을 오버레이 클릭 핸들러(React 밖 DOM)와 1회성 마운트 effect 가 참조하도록 ref 로 고정.
   const onSelectRef = useRef(onSelect);
@@ -121,8 +130,8 @@ export default function KakaoMap({
         z: CLUSTER_Z,
       })),
     ];
-    return spreadOverlaps(items, scale);
-  }, [view, scale]);
+    return spreadOverlaps(items, scale, forbidden);
+  }, [view, scale, forbidden]);
 
   /**
    * 변위를 얹은 최종 표시 좌표. 변위가 없으면 원래 좌표 그대로다.
@@ -210,11 +219,17 @@ export default function KakaoMap({
   }, []);
 
   /**
-   * 클러스터 배율 읽기 — `보이는 영역(도)` 과 `컨테이너 크기(px)` 의 비.
-   * 투영 API 대신 `getBounds()` 만 쓴다(더 안정적이고, 한 화면 안의 메르카토르 왜곡은 무시 가능).
+   * 클러스터 배율 + 컨트롤 금지 구역 읽기 — 한 번의 `getBounds()` 로 **함께** 읽는다
+   * (따로 읽으면 이동 중에 두 값이 다른 시야를 가리켜 마커가 엉뚱한 자리로 밀린다).
+   *
+   * 배율은 `보이는 영역(도)` 과 `컨테이너 크기(px)` 의 비다. 투영 API 대신 `getBounds()` 만
+   * 쓴다(더 안정적이고, 한 화면 안의 메르카토르 왜곡은 무시 가능).
    * 아직 크기·시야가 확정되지 않은 프레임에서는 `null` → 클러스터링을 건너뛴다.
    */
-  const readScale = useCallback((): ClusterScale | null => {
+  const readView = useCallback((): {
+    scale: ClusterScale;
+    forbidden: ForbiddenBox[];
+  } | null => {
     const map = mapRef.current;
     const el = containerRef.current;
     if (!map || !el) return null;
@@ -230,17 +245,25 @@ export default function KakaoMap({
     } catch {
       return null;
     }
-    const dLng = ne.getLng() - sw.getLng();
-    const dLat = ne.getLat() - sw.getLat();
+    const swLng = sw.getLng();
+    const swLat = sw.getLat();
+    const neLng = ne.getLng();
+    const neLat = ne.getLat();
+    const dLng = neLng - swLng;
+    const dLat = neLat - swLat;
     if (!(dLng > 0) || !(dLat > 0)) return null;
     // 확대 애니메이션 직후엔 시야가 말이 안 되는 값으로 잡히는 순간이 있다(실측). 그 배율로
     // 변위를 계산하면 도 단위 변위가 폭주해 마커가 좌표 범위를 벗어나 아예 안 그려진다 →
     // 지도 하나에 담길 수 없는 폭(경상북도 전체가 약 2.5°)이면 그 값은 버린다.
     if (dLng > MAX_PLAUSIBLE_SPAN_DEG || dLat > MAX_PLAUSIBLE_SPAN_DEG) return null;
-    return {
+    const scale = {
       pxPerDegLng: w / dLng,
       pxPerDegLat: h / dLat,
       minSeparationPx: DEFAULT_MIN_SEPARATION_PX,
+    };
+    return {
+      scale,
+      forbidden: forbiddenOf(el, controlsRef.current, { swLng, swLat, neLng, neLat }, scale),
     };
   }, []);
 
@@ -249,20 +272,19 @@ export default function KakaoMap({
     const maps = mapsRef.current;
     const map = mapRef.current;
     if (!ready || !maps || !map) return;
-    // 배율이 그대로면 같은 객체를 유지해 재클러스터링·오버레이 재생성을 막는다.
-    const sync = () =>
-      setScale((prev) => {
-        const next = readScale();
-        if (!next) return prev;
-        if (
-          prev &&
-          prev.pxPerDegLng === next.pxPerDegLng &&
-          prev.pxPerDegLat === next.pxPerDegLat
-        ) {
-          return prev;
-        }
-        return next;
-      });
+    // 값이 그대로면 같은 객체를 유지해 재클러스터링·오버레이 재생성을 막는다.
+    const sync = () => {
+      const next = readView();
+      if (!next) return;
+      setScale((prev) =>
+        prev &&
+        prev.pxPerDegLng === next.scale.pxPerDegLng &&
+        prev.pxPerDegLat === next.scale.pxPerDegLat
+          ? prev
+          : next.scale,
+      );
+      setForbidden((prev) => (sameBoxes(prev, next.forbidden) ? prev : next.forbidden));
+    };
     sync();
     const ev = maps.event;
     if (!ev?.addListener) return;
@@ -274,7 +296,7 @@ export default function KakaoMap({
     return () => {
       ev.removeListener?.(map, 'idle', sync);
     };
-  }, [ready, readScale]);
+  }, [ready, readView]);
 
   /**
    * 접힌 그룹 펼치기 — 그 지점으로 옮기고 두 단계 확대한다(배율이 4배 → 대개 한 번에 풀린다).
@@ -465,7 +487,11 @@ export default function KakaoMap({
     <div className="absolute inset-0 overflow-hidden">
       <div ref={containerRef} className="h-full w-full" />
 
-      <div className="absolute bottom-3 right-3 z-[3] flex flex-col gap-1.5">
+      {/* 마커보다 위 레이어라 이 자리에 마커가 오면 클릭을 가로챈다 → 겹침 해소에 금지 구역으로 넘긴다(F8 ㉠). */}
+      <div
+        ref={controlsRef}
+        className="absolute bottom-3 right-3 z-[3] flex flex-col gap-1.5"
+      >
         <button
           type="button"
           aria-label="확대"
@@ -541,6 +567,87 @@ function moveTo(
  * 코스 마커는 절대 접히지 않으니 항상 위에 있어야 순번 배지가 가려지지 않는다.
  */
 const CLUSTER_Z = 15;
+
+/** 금지 구역 없음. 매 렌더 새 배열을 만들지 않도록 상수로 둔다(memo 무효화 방지). */
+const NO_FORBIDDEN: ForbiddenBox[] = [];
+
+/** 금지 구역이 실제로 바뀌었는지. 이동할 때마다 같은 값이면 재계산을 건너뛴다. */
+function sameBoxes(a: ForbiddenBox[], b: ForbiddenBox[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every(
+    (x, i) =>
+      x.minX === b[i].minX &&
+      x.maxX === b[i].maxX &&
+      x.minY === b[i].minY &&
+      x.maxY === b[i].maxY,
+  );
+}
+
+/**
+ * 마커보다 **위에 그려지는 지도 크롬**의 화면 사각형 (F8 ㉠).
+ *
+ * 두 종류가 있고 둘 다 실측으로 마커를 가리는 게 확인됐다(2026-08-29):
+ * ① 우리 확대·축소·현위치 버튼 묶음(`z-[3]`) — 데스크톱 1280px 에서 마커를 덮어
+ *    담기 대신 **지도가 확대**됐다.
+ * ② SDK 가 컨테이너에 직접 붙이는 축척·로고(좌하단 135×19) — 그 위 마커의 배지·토글이
+ *    모두 축척 DOM 에 먹혔다.
+ *
+ * ②는 클래스·구조에 기대지 않고 **컨테이너 직속 자식 중 전체 크기가 아닌 것**으로 찾는다 —
+ * 지도 레이어만 컨테이너를 꽉 채우므로 남는 것이 크롬이고, SDK 가 바뀌어도 잘 버틴다.
+ */
+function chromeRects(
+  container: HTMLElement,
+  controls: HTMLElement | null,
+): ScreenRect[] {
+  const cont = container.getBoundingClientRect();
+  if (!cont.width || !cont.height) return [];
+  const toRect = (r: DOMRect): ScreenRect => ({
+    left: r.left - cont.left,
+    top: r.top - cont.top,
+    right: r.right - cont.left,
+    bottom: r.bottom - cont.top,
+  });
+  const out: ScreenRect[] = [];
+  const ctrl = controls?.getBoundingClientRect();
+  if (ctrl?.width && ctrl.height) out.push(toRect(ctrl));
+  Array.from(container.children).forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    if (r.width > cont.width * 0.8 && r.height > cont.height * 0.8) return;
+    out.push(toRect(r));
+  });
+  return out;
+}
+
+/**
+ * 지도 크롬이 덮는 화면 영역 → 마커 앵커 금지 구역 (F8 ㉠).
+ * 화면 px → 좌표 → 겹침 해소 좌표계(도 × 배율)로 옮겨 `spreadOverlaps` 에 그대로 넘긴다.
+ */
+function forbiddenOf(
+  container: HTMLElement,
+  controls: HTMLElement | null,
+  view: { swLng: number; swLat: number; neLng: number; neLat: number },
+  scale: ClusterScale,
+): ForbiddenBox[] {
+  const cont = container.getBoundingClientRect();
+  if (!cont.width || !cont.height) return NO_FORBIDDEN;
+  const rects = chromeRects(container, controls);
+  if (!rects.length) return NO_FORBIDDEN;
+  const lngAt = (x: number) => view.swLng + (x / cont.width) * (view.neLng - view.swLng);
+  const latAt = (y: number) => view.neLat - (y / cont.height) * (view.neLat - view.swLat);
+  return rects.map((rect) => {
+    // 옮길 기준은 좌표점이 아니라 클릭 대상(배지·토글) 중심이다 → 앵커 기준으로 부풀린다.
+    const keep = anchorKeepOut(rect);
+    return {
+      minX: lngAt(keep.left) * scale.pxPerDegLng,
+      maxX: lngAt(keep.right) * scale.pxPerDegLng,
+      // 화면 y 는 아래로, 위도는 위로 증가한다 → 화면 bottom 이 최소 위도다.
+      minY: latAt(keep.bottom) * scale.pxPerDegLat,
+      maxY: latAt(keep.top) * scale.pxPerDegLat,
+    };
+  });
+}
 
 /**
  * 지도 한 화면에 담길 수 있는 최대 시야 폭(도). 경상북도 전체가 약 2.5° 라 3° 를 넘는

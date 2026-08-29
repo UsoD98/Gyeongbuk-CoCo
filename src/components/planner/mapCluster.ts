@@ -190,6 +190,60 @@ export interface Displacement {
   dLng: number;
 }
 
+/** 화면(지도 컨테이너) 픽셀 사각형. 왼쪽·위가 0 이고 y 는 **아래로** 증가한다. */
+export interface ScreenRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * 겹침 해소 좌표계(`경도×pxPerDegLng`, `위도×pxPerDegLat`)의 사각형.
+ * 이 좌표계는 위도를 그대로 쓰므로 y 가 **위로** 증가한다 — 화면 방향과 헷갈리지 않도록
+ * top/bottom 대신 최소/최대로 적는다.
+ */
+export interface ForbiddenBox {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/**
+ * 마커 앵커(배지 아래 가운데 = 오버레이 좌표점) 기준, **클릭 대상 중심**의 오프셋(px).
+ * `markerStyle` 의 배지 28px · 토글 22px(배지 오른쪽 아래로 6px 돌출) · 그룹 배지 32px 에서 나온다.
+ * 앵커가 어디 있으면 그 대상이 가려지는지 계산하는 데만 쓴다.
+ */
+const TARGET_OFFSETS = [
+  { dx: 0, dy: -14 }, // 마커 배지 중심 (28/2)
+  { dx: 9, dy: -5 }, // 토글 중심 (28/2 + 6 − 22/2, 6 − 22/2)
+  { dx: 0, dy: -16 }, // 그룹 배지 중심 (32/2)
+];
+
+/**
+ * 지도 위에 떠 있는 UI(확대·축소·현위치 컨트롤)가 차지한 화면 영역을,
+ * **마커 앵커가 들어가면 안 되는 영역**으로 바꾼다 (F8 ㉠).
+ *
+ * 컨트롤은 마커 오버레이보다 위 레이어(`z-[3]`)라 그 위에 놓인 마커는 배지도 토글도 눌리지
+ * 않고 **누르면 지도가 확대된다**. 마커를 옮겨서 피하는 수밖에 없는데, 옮길 기준은 마커의
+ * 좌표점이 아니라 **클릭 대상의 중심**이다 → 대상 중심이 `rect` 에 들어가게 되는 앵커 위치를
+ * 전부 모아 그 bounding box 를 돌려준다(대상별 영역의 합집합보다 살짝 넓지만 안전한 쪽이다).
+ */
+export function anchorKeepOut(rect: ScreenRect): ScreenRect {
+  // 대상 중심 = 앵커 + off 이므로, 대상이 rect 안 ⇔ 앵커가 (rect − off) 안.
+  const lefts = TARGET_OFFSETS.map((o) => rect.left - o.dx);
+  const rights = TARGET_OFFSETS.map((o) => rect.right - o.dx);
+  const tops = TARGET_OFFSETS.map((o) => rect.top - o.dy);
+  const bottoms = TARGET_OFFSETS.map((o) => rect.bottom - o.dy);
+  return {
+    left: Math.min(...lefts),
+    right: Math.max(...rights),
+    top: Math.min(...tops),
+    bottom: Math.max(...bottoms),
+  };
+}
+
 /**
  * 원래 위치에서 옮길 수 있는 최대 거리 = 겹침 임계의 몇 배까지인가.
  * 한 번의 충돌을 푸는 데 필요한 거리는 최대 `minSeparationPx` 라 1.0 보다 커야 하고,
@@ -212,12 +266,16 @@ const SEPARATION_EPS = 1.01;
  * 찾아** 옮긴다. "밀어내기"가 아니라 "빈 자리 찾기"인 이유: 밀어내면 밀린 방향에 또 다른
  * 항목이 있을 때 연쇄로 멀리 날아가고, 캡에 걸려 겹침이 그대로 남는다(실측으로 확인).
  *
+ * `forbidden` 이 있으면 그 사각형 안에는 **앵커를 두지 않는다**(F8 ㉠ — 지도 컨트롤 자리).
+ * 겹침 회피와 같은 후보 탐색을 쓰므로 규칙이 하나로 유지된다.
+ *
  * 결정적이며(같은 입력 → 같은 결과) 항목 수에 대해 O(n²·슬롯) 이다 — 클러스터링이 밀집을
  * 미리 접어 주므로 여기 오는 항목은 코스 마커 몇 개 + 그룹 몇 개다.
  */
 export function spreadOverlaps(
   items: OverlapItem[],
   scale: ClusterScale,
+  forbidden: ForbiddenBox[] = [],
 ): Map<string, Displacement> {
   const out = new Map<string, Displacement>();
   const usable =
@@ -226,7 +284,9 @@ export function spreadOverlaps(
     scale.pxPerDegLng > 0 &&
     scale.pxPerDegLat > 0 &&
     scale.minSeparationPx > 0;
-  if (!usable || items.length < 2) return out;
+  // 항목이 하나뿐이면 서로 겹칠 일이 없다 — 단, 금지 구역이 있으면 **혼자서도** 비켜야 한다
+  // (마커 하나만 뜬 지도에서 그게 하필 컨트롤 자리면 담기가 아예 불가능해진다).
+  if (!usable || (items.length < 2 && !forbidden.length)) return out;
 
   const minSep = scale.minSeparationPx;
   const threshSq = minSep * minSep;
@@ -247,11 +307,15 @@ export function spreadOverlaps(
       const dy = y - p.y;
       return dx * dx + dy * dy >= threshSq;
     });
+  /** 컨트롤 등 위 레이어 UI 가 덮는 자리인가. 여기 놓이면 클릭이 그쪽에 먹힌다. */
+  const isBlocked = (x: number, y: number) =>
+    forbidden.some((b) => x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY);
+  const canPlace = (x: number, y: number) => isFree(x, y) && !isBlocked(x, y);
 
   order.forEach((it, index) => {
     const base = toPx(it);
     let spot = base;
-    if (!isFree(base.x, base.y)) {
+    if (!canPlace(base.x, base.y)) {
       // 가까운 고리부터: 필요한 만큼만 옮긴다.
       const radii = [minSep * SEPARATION_EPS, maxOffset];
       // 시작 각도를 항목마다 황금각으로 돌려 같은 자리에 여럿이 몰려도 서로 다른 방향을 본다.
@@ -263,7 +327,7 @@ export function spreadOverlaps(
           const angle = start + (k * 2 * Math.PI) / RING_SLOTS;
           const cx = base.x + Math.cos(angle) * radius;
           const cy = base.y + Math.sin(angle) * radius;
-          if (isFree(cx, cy)) found = { x: cx, y: cy };
+          if (canPlace(cx, cy)) found = { x: cx, y: cy };
         }
         if (found) break;
       }
