@@ -37,6 +37,15 @@ const formatDate = (date: Date | null): string | null => {
 };
 
 /**
+ * 오늘 00:00. 지난 날짜로는 여행을 계획할 수 없으니 일정 선택의 하한으로 쓴다.
+ * 시각을 잘라 내야 "오늘"이 하한에 걸려 함께 막히지 않는다.
+ */
+const startOfToday = (): Date => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+/**
  * R10 · 검색바 한 칸의 껍데기.
  *
  * 모바일에서는 5개 칸이 `border-base-100 bg-base-100`(= 카드 배경과 동일) 이라 "눌러야 할 곳"
@@ -109,6 +118,9 @@ export default function Index() {
   const [isTransportDropdownOpen, setIsTransportDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  // 일정 선택 하한. 달력을 열 때마다 다시 계산한다 — 탭을 열어 둔 채 자정을 넘기면
+  // 마운트 시점의 "오늘"이 과거가 되어 지난 날짜가 다시 열려 버린다.
+  const [minSelectableDate, setMinSelectableDate] = useState(startOfToday);
   const destinationDropdownRef = useRef<HTMLDivElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
   const transportDropdownRef = useRef<HTMLDivElement>(null);
@@ -212,6 +224,14 @@ export default function Index() {
     const end = formatDate(endDate);
     if (!start || !end) {
       toast.error('여행 일정을 선택해주세요');
+      return;
+    }
+    // 자정을 넘긴 탭에서는 이미 고른 날짜가 과거일 수 있다 → 생성 요청 전에 한 번 더 본다.
+    const today = startOfToday();
+    if (startDate && startDate < today) {
+      setMinSelectableDate(today);
+      setDateRange([null, null]);
+      toast.error('오늘 이후 날짜로 일정을 선택해주세요');
       return;
     }
     if (selectedThemeLabels.length === 0) {
@@ -361,13 +381,18 @@ export default function Index() {
                     : [dates, null];
                   setDateRange([start, end]);
                 }}
+                // 지난 날짜는 선택 불가(달력에서 회색 처리되고 이전 달로도 넘어가지 않는다).
+                minDate={minSelectableDate}
                 dateFormat="MM/dd"
                 customInput={<DateTrigger />}
                 calendarClassName="custom-datepicker-calendar"
                 // 좁은 화면에서는 기본 팝오버가 검색바 옆에 붙어 좌우로 잘린다 →
                 // 전체화면 포털로 띄우고(`index.css` 에서 셀을 44px 로 키운다) 데스크톱은 종전 팝오버.
                 withPortal={!isDesktop}
-                onCalendarOpen={() => setIsCalendarOpen(true)}
+                onCalendarOpen={() => {
+                  setMinSelectableDate(startOfToday());
+                  setIsCalendarOpen(true);
+                }}
                 onCalendarClose={() => setIsCalendarOpen(false)}
               />
             </div>
