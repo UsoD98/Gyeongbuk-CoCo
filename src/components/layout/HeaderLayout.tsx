@@ -38,6 +38,10 @@ export const Header = () => {
   };
 
   return (
+    /*
+      `.navbar` 는 index.css 에서 position:relative + z-index:30 을 받아 **스택 컨텍스트**가 된다
+      (z 계층 사다리는 그쪽 주석 참조). 따라서 아래 두 팝오버의 z 는 헤더 내부 순서일 뿐이다 — R7.
+    */
     <div className={cn('navbar', 'bg-primary', 'px-3 md:px-6', 'py-2 md:py-0')}>
       {/* 모바일 버거 메뉴 */}
       <div className={cn('md:hidden', 'flex', 'items-center')}>
@@ -117,7 +121,8 @@ export const Header = () => {
           </div>
           <ul
             tabIndex={-1}
-            className="dropdown-content menu z-1 mt-4 w-28 rounded-box bg-base-100 p-2 shadow-lg"
+            /* 모바일 메뉴(z-20)와 화면에서 겹치므로 헤더 안에서 그보다 위에 둔다. */
+            className="dropdown-content menu z-30 mt-4 w-28 rounded-box bg-base-100 p-2 shadow-lg"
           >
             {status === 'authenticated' ? (
               <li>
@@ -145,7 +150,7 @@ export const Header = () => {
 
       {/* 모바일 드롭다운 메뉴 */}
       {isDrawerOpen && (
-        <div className="absolute top-full left-0 right-0 md:hidden bg-primary border-t border-primary-600">
+        <div className="absolute top-full left-0 right-0 z-20 md:hidden bg-primary border-t border-primary-600">
           <div
             role="tablist"
             className={cn(
