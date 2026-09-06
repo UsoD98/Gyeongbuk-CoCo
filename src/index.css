@@ -18,8 +18,27 @@
     background-color: var(--color-base-200);
 }
 
-.btn-circle {
-    width: 24px;
+/*
+ * R8 · 터치 타깃 보정 유틸리티.
+ *
+ * 시각적 크기를 바꾸기 곤란한 작은 컨트롤에 얹어 **투명 히트박스만** 44×44px 로
+ * 넓힌다(Apple HIG 44pt). daisyUI 의 `btn-xs`/`btn-sm` 은 24/32px 라 그대로는 미달이다.
+ * 이미 44px 를 넘는 축은 `max()` 로 원래 크기를 지킨다(가로로 긴 버튼이 줄지 않게).
+ *
+ * 사용 조건 2가지:
+ *   ① 대상이 **이미 positioned** 이거나 호출부가 `relative` 를 함께 준다
+ *      (유틸리티가 `position` 을 강제하면 `absolute` 로 놓인 버튼을 깨뜨린다).
+ *   ② 히트박스가 형제 위로 넘치므로, **바로 옆에 다른 탭 대상이 있는 자리에는 쓰지 않는다**
+ *      (그런 곳은 방향을 지정한 `before:` 클래스로 바깥쪽으로만 넓히거나 실제 높이를 준다).
+ */
+.tap-44::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
 }
 
 /*

@@ -41,6 +41,8 @@ export default function LikeButton({
       className={cn(
         // 버튼 크기(btn-sm/btn-xs 등)는 호출부에서 className 으로 지정한다(사이즈 클래스 충돌 방지).
         'btn border-none bg-base-100/90 shadow',
+        // R8 · 시각 크기는 그대로 두고 히트박스만 44px 로 넓힌다(`relative` 는 `tap-44` 의 전제).
+        'relative tap-44',
         // 개수를 같이 보여줄 때만 가로로 늘린다(그 외엔 종전대로 원형 하트).
         count === undefined ? 'btn-circle' : 'gap-1.5 px-3',
         liked ? 'text-error' : 'text-base-content/60',

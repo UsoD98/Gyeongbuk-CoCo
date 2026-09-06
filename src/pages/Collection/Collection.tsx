@@ -49,8 +49,8 @@ function CourseCard({
         )}
       >
         <div className="flex flex-col gap-3">
-          {/* 우상단 삭제 버튼과 겹치지 않도록 제목에 우측 여백. */}
-          <h3 className="line-clamp-2 pr-9 text-lg font-bold text-base-content">
+          {/* 우상단 삭제 버튼과 겹치지 않도록 제목에 우측 여백(R8 로 히트박스가 44px 가 되어 pr-12). */}
+          <h3 className="line-clamp-2 pr-12 text-lg font-bold text-base-content">
             {/* AI 생성 코스는 제목이 비어 있다(제목 지정=GBC015 이후). 빈 제목 폴백. */}
             {course.title?.trim() || 'AI 추천 코스'}
           </h3>
@@ -100,6 +100,8 @@ function CourseCard({
         onClick={() => onDelete(course)}
         className={cn(
           'btn btn-ghost btn-sm btn-square absolute right-2.5 top-2.5 z-10',
+          // R8 · 32px 버튼의 히트박스를 44px 로. 제목 우측 여백(`pr-12`)이 그만큼 넓혀져 있다.
+          'tap-44',
           'text-base-content/40 hover:bg-error/10 hover:text-error',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error',
         )}
