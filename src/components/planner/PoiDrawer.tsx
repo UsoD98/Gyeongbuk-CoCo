@@ -20,6 +20,7 @@ import ImgPlaceholder from '@/components/planner/parts/ImgPlaceholder.tsx';
 import LikeButton from '@/components/planner/LikeButton.tsx';
 import Stars from '@/components/planner/parts/Stars.tsx';
 import { getApiErrorMessage } from '@/api/types.ts';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock.ts';
 import { usePoi } from '@/hooks/usePoi.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { kakaoMapPlaceUrl } from '@/utils/kakaoMap.ts';
@@ -51,7 +52,11 @@ export default function PoiDrawer() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawer.open, closeDrawer]);
 
-  if (!drawer.open || !drawer.poiId || !poi) return null;
+  // 아래 early return 과 같은 조건 — 시트가 실제로 떠 있는 동안에만 배경을 잠근다.
+  const visible = drawer.open && !!drawer.poiId && !!poi;
+  useBodyScrollLock(visible);
+
+  if (!visible || !poi) return null;
 
   const day = course.days[activeDay];
   const inDay = day?.items.includes(poi.id) ?? false;
@@ -115,6 +120,16 @@ export default function PoiDrawer() {
         )}
       >
         <div className="relative shrink-0">
+          {/*
+            grabber — 장식이 아니라 "여기가 시트 상단"이라는 단서다. 사진 위에 얹히므로
+            흰 반투명 + 그림자로 밝은 사진에서도 보이게 한다. 우측 패널인 데스크톱에는 없다.
+          */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-2 z-10 flex justify-center lg:hidden"
+          >
+            <span className="h-1 w-10 rounded-full bg-base-100/80 shadow-sm" />
+          </div>
           <ImgPlaceholder
             label={poi.img}
             src={poi.imageUrl}
@@ -138,7 +153,7 @@ export default function PoiDrawer() {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-start justify-between gap-2">
               <h3 className="text-xl font-extrabold">{poi.name}</h3>
@@ -288,7 +303,13 @@ export default function PoiDrawer() {
           </a>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-base-200 p-4">
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2.5 border-t border-base-200 px-4 pt-4',
+            // 시트 최하단 → 홈 인디케이터가 버튼을 물지 않도록. 기존 p-4(1rem)가 하한(R5).
+            'pb-[max(1rem,env(safe-area-inset-bottom))]',
+          )}
+        >
           <button
             type="button"
             className="btn btn-outline"

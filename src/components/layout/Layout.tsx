@@ -6,7 +6,20 @@ import { cn } from '@/utils/cn.ts';
 
 export default function Layout() {
   return (
-    <div className={cn('min-h-screen', 'flex', 'flex-col')}>
+    <div
+      className={cn(
+        'min-h-screen',
+        'flex',
+        'flex-col',
+        /*
+          index.html 이 viewport-fit=cover 라 가로 모드 노치 아래까지 그려진다 →
+          셸 전체를 좌우 안전영역만큼 들여 헤더·본문·푸터가 노치에 물리지 않게 한다.
+          세로 모드·데스크톱에서는 inset 이 0 이라 아무 영향이 없다(R5).
+        */
+        'pl-[env(safe-area-inset-left)]',
+        'pr-[env(safe-area-inset-right)]',
+      )}
+    >
       <Header />
 
       {/*

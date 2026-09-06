@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock.ts';
 import { cn } from '@/utils/cn.ts';
 
 /**
@@ -41,6 +42,9 @@ export default function ConfirmDialog({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, busy, onCancel]);
+
+  // 다이얼로그가 떠 있는 동안 뒤 페이지가 스크롤되지 않게 한다(R5).
+  useBodyScrollLock(open);
 
   if (!open) return null;
 
