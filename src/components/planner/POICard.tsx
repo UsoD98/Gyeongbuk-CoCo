@@ -67,7 +67,7 @@ export default function POICard({
     return (
       <div
         {...openProps}
-        className="card flex cursor-pointer gap-3 rounded-2xl bg-base-100 p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+        className="card flex cursor-pointer gap-3 rounded-2xl bg-base-100 p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
       >
         <ImgPlaceholder
           label={poi.img}
@@ -96,7 +96,7 @@ export default function POICard({
   return (
     <div
       {...openProps}
-      className="card flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-base-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="card flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-base-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
     >
       <div className="relative">
         <ImgPlaceholder

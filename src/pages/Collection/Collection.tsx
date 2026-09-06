@@ -44,7 +44,9 @@ function CourseCard({
         to={`/planner/${course.courseId}`}
         className={cn(
           'card block rounded-2xl bg-base-100 p-5 shadow-sm ring-1 ring-base-200',
-          'transition hover:-translate-y-0.5 hover:shadow-md',
+          // R11 · `hover:` 는 Tailwind v4 가 `@media (hover:hover)` 로 감싸 방출하므로 터치 기기에
+          // 고착되지 않는다. 터치에는 눌림 피드백이 아무것도 없었으므로 `active:` 를 더한다.
+          'transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         )}
       >

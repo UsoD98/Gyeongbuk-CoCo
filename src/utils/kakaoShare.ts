@@ -90,7 +90,7 @@ export interface ShareContent {
   url: string;
   title: string;
   description: string;
-  /** 피드 카드 썸네일(절대 URL). 미지정 시 favicon 사용. */
+  /** 피드 카드 썸네일(절대 URL). 미지정 시 서비스 기본 이미지 사용. */
   imageUrl?: string;
 }
 
@@ -111,8 +111,10 @@ export async function shareViaKakao(content: ShareContent): Promise<boolean> {
       content: {
         title: content.title,
         description: content.description,
+        // R11 · 기본값이 `favicon.svg` 였다 — 카카오 피드 카드는 **래스터 이미지만** 싣기 때문에
+        // 썸네일이 비어 보였다. 같은 `public/` 의 500×500 JPG 로 바꾼다(권장 최소 200×200 충족).
         imageUrl:
-          content.imageUrl ?? `${window.location.origin}/favicon.svg`,
+          content.imageUrl ?? `${window.location.origin}/gbcoco-icon.jpg`,
         link,
       },
       buttons: [{ title: '코스 보기', link }],

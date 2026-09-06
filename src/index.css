@@ -4,12 +4,16 @@
     themes: light, dark, cupcake, bumblebee, emerald, corporate;
 }
 
-@font-face {
-    font-family: 'Pretendard';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2') format('woff2');
-    font-weight: 400;
-    font-display: swap;
-}
+/*
+ * R11 · Pretendard 는 더 이상 여기서 선언하지 않는다.
+ *
+ * 예전에는 이 자리에 Regular(400) `@font-face` **한 벌**만 있었고, UI 는 `font-semibold`(600)·
+ * `font-bold`(700)·`font-extrabold`(800)를 쓰고 있었다 → 700/800 이 전부 **브라우저 합성 볼드**라
+ * 저해상도 모바일에서 뭉갰다. 웨이트를 통짜로 더 받으면(Bold 한 벌 791KB) 모바일 전송량이
+ * 1.5MB 로 뛴다 → 공식 **dynamic-subset**(unicode-range 분할)으로 갈아 `index.html <head>` 에서
+ * `<link>` 로 받는다. 실제로 쓰는 글자 구간만 내려와 전 웨이트가 진짜 폰트가 된다.
+ * 선언 위치를 `<head>` 로 옮긴 이유와 배경은 `index.html` 의 주석 참조.
+ */
 
 :root {
     --color-primary: #008080;
@@ -80,7 +84,12 @@
 
 
 @theme {
-    --font-sans: 'Pretendard', sans-serif;
+    /*
+     * 폴백은 한글이 있는 시스템 폰트까지 적어 둔다 — `font-display: swap` 이라 Pretendard 가
+     * 도착하기 전 한 번은 폴백으로 그려지는데, 맨 뒤의 `sans-serif` 만 두면 그 사이 한글이
+     * 플랫폼 기본 고딕으로 크게 튄다.
+     */
+    --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
     --font-serif: 'Pretendard', serif;
 
     /* primary */
