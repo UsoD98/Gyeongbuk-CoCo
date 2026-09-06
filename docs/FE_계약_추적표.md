@@ -62,6 +62,14 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - **FE 준비 상태**: S0-C(`authStore.userId`+`setAuth`+localStorage, `LoginResponse.userId?`)는 ①이 되면 **코드 수정 없이 즉시 동작**. 현재는 항상 null(무해).
 - **📤 요청 발송(2026-08-22)**: [`BE_계약_요청서.md` R1](./BE_계약_요청서.md#r1-로그인-사용자-userid-획득-경로-추적표-4)로 정리(권장안 ①). 백엔드 `aa2a555`(0.5.12) 재실측 결과 **변화 없음** — 세 인증 경로 모두 `LoginResponseDto{accessToken}` 단일 필드, `UserController`는 여전히 `/{userId}` 경로변수만. (라인 참조를 현재 소스 기준 `AuthController.java:37/63/78`로 정정했다.)
 
+### 10. `hasPassword` (소셜 계정 비밀번호 변경 가림) ◐ 요청 대기
+- **배경**: `UserServiceImpl.updatePassword` 는 `user.getPassword() == null` 이면 **"소셜 로그인 유저는 비밀번호를 변경할 수 없습니다."** 로 거절한다. FE 가 폼을 띄우고 제출해야만 알게 되므로 애초에 숨기는 게 맞다.
+- **문제**: FE 는 비밀번호 보유 여부를 알 수 없다 — GBC006(`UserInfoResponseDto`)에 `provider` 도 `hasPassword` 도 없다.
+- **`provider` 로는 정확하지 않다**: `KakaoOAuthService.registerKakaoUser` 가 같은 이메일의 **기존 로컬 계정에 카카오를 연결**(`User.linkKakao`)하면 `provider='kakao'` 가 되지만 **비밀번호는 남는다**. 즉 `provider=='kakao'` ≠ 비밀번호 없음.
+- **FE 잠정 처리(2026-09-06)**: `authStore.provider`(`'local'|'kakao'`, localStorage 병행)에 **이번 세션의 로그인 수단**을 남기고, `kakao` 면 마이페이지에서 비밀번호 변경 폼 대신 안내를 띄운다. 모르면(`null`, 구버전 저장값 없음) 제한하지 않고 서버 판단에 맡긴다.
+  - 한계: 위 연결 계정이 카카오로 들어오면 **비밀번호가 있어도 변경 UI 가 가려진다**(서버 거절은 아니므로 기능 손실만, 오동작은 없음).
+- **요청(백엔드)**: `UserInfoResponseDto` 에 **`hasPassword: boolean`**(= `password != null`) 추가. 값 자체가 아니라 보유 여부만이라 노출 위험이 없고, 서버 규칙과 1:1 로 맞는다. 오면 FE 는 `provider` 대신 이 값으로 가른다.
+
 ---
 
 ## 응답 타입/엔드포인트 실측 (S0-B 검증)

@@ -43,6 +43,28 @@ function readStoredUserId(): number | null {
 }
 
 /**
+ * 이번 세션이 어떤 수단으로 로그인했는지.
+ * 카카오로 들어온 계정은 로컬 비밀번호가 없어 비밀번호 변경(GBC008)이 성립하지 않으므로,
+ * 마이페이지가 그 섹션을 아예 띄우지 않기 위해 필요하다(서버도 `password == null` 이면 거절한다).
+ *
+ * ⚠️ 서버의 정확한 기준은 `provider` 가 아니라 **비밀번호 보유 여부**다 — 같은 이메일의 로컬
+ * 계정에 카카오를 연결하면(`KakaoOAuthService.registerKakaoUser`) `provider='kakao'` 가 되지만
+ * 비밀번호는 남는다. FE 는 그 값을 알 수 없어(GBC006 응답에 없다) **로그인 수단**으로 가른다.
+ * 백엔드가 `hasPassword` 를 내려 주면 그쪽으로 옮긴다. docs/FE_계약_추적표.md #10
+ *
+ * 재발급(reissue)은 수단을 알려 주지 않으므로 새로고침 뒤에도 유지되도록 localStorage 에 둔다
+ * (userId 와 같은 규칙 — 민감정보가 아니다).
+ */
+export type AuthProvider = 'local' | 'kakao';
+
+const PROVIDER_KEY = 'gb-coco.authProvider';
+
+function readStoredProvider(): AuthProvider | null {
+  const raw = localStorage.getItem(PROVIDER_KEY);
+  return raw === 'local' || raw === 'kakao' ? raw : null;
+}
+
+/**
  * 세션 식별 키. 로그아웃(`guest`)·다른 계정 로그인에서 값이 바뀐다.
  * 401 재발급(`setAuth(token)` 으로 userId 유지)은 키가 그대로다.
  *
@@ -57,6 +79,8 @@ export function authSessionKey(): string {
 interface AuthState {
   accessToken: string | null;
   userId: number | null;
+  /** 로그인 수단. 모르면 null(구버전 저장값 없음) — 이때는 제한하지 않고 서버 판단에 맡긴다. */
+  provider: AuthProvider | null;
   isAuthenticated: boolean;
   status: AuthStatus;
   /**
@@ -64,8 +88,15 @@ interface AuthState {
    * userId를 생략하면(undefined) **토큰 클레임에서 스스로 꺼낸다** — 응답 바디에 userId가
    * 없어도 세 인증 경로(로그인·재발급·카카오)가 모두 채워지도록.
    * 클레임도 없으면 기존 값을 유지하고, token이 없으면(로그아웃) userId도 함께 비운다.
+   *
+   * provider도 같은 규칙이다 — 생략하면(undefined) 기존 값 유지(재발급 보존용),
+   * token이 없으면 함께 비운다. 로그인/카카오 진입점에서만 명시한다.
    */
-  setAuth: (token: string | null, userId?: number | null) => void;
+  setAuth: (
+    token: string | null,
+    userId?: number | null,
+    provider?: AuthProvider | null,
+  ) => void;
   setStatus: (status: AuthStatus) => void;
   clear: () => void;
 }
@@ -73,10 +104,11 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   userId: readStoredUserId(),
+  provider: readStoredProvider(),
   isAuthenticated: false,
   status: 'idle',
 
-  setAuth: (token, userId) => {
+  setAuth: (token, userId, provider) => {
     if (token) localStorage.setItem(SESSION_HINT_KEY, '1');
     else localStorage.removeItem(SESSION_HINT_KEY);
 
@@ -95,9 +127,23 @@ export const useAuthStore = create<AuthState>((set) => ({
         localStorage.removeItem(USER_ID_KEY);
       }
 
+      // provider: undefined = 기존 유지(재발급) / 값 = 갱신. token이 없으면 무조건 null.
+      const nextProvider = !token
+        ? null
+        : provider === undefined
+          ? state.provider
+          : provider;
+
+      if (nextProvider) {
+        localStorage.setItem(PROVIDER_KEY, nextProvider);
+      } else {
+        localStorage.removeItem(PROVIDER_KEY);
+      }
+
       return {
         accessToken: token,
         userId: nextUserId,
+        provider: nextProvider,
         isAuthenticated: Boolean(token),
         status: token ? 'authenticated' : 'guest',
       };
@@ -109,9 +155,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   clear: () => {
     localStorage.removeItem(SESSION_HINT_KEY);
     localStorage.removeItem(USER_ID_KEY);
+    localStorage.removeItem(PROVIDER_KEY);
     set({
       accessToken: null,
       userId: null,
+      provider: null,
       isAuthenticated: false,
       status: 'guest',
     });

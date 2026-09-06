@@ -42,7 +42,8 @@ const KakaoLoginComponent = ({ redirectTo = '/' }: KakaoLoginComponentProps) => 
             const { accessToken, userId } = await kakaoCallback({
               kakaoAccessToken: response.response.access_token,
             });
-            setAuth(accessToken, userId);
+            // 카카오 계정은 로컬 비밀번호가 없다 → 마이페이지가 비밀번호 변경을 숨긴다.
+            setAuth(accessToken, userId, 'kakao');
             toast.success('로그인되었습니다.');
             navigate(redirectTo, { replace: true });
           } catch (err) {
