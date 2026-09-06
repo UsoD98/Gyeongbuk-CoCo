@@ -16,6 +16,8 @@ import DatePicker from 'react-datepicker';
 import { createCourse } from '@/api/tourCourse.ts';
 import type { Transport } from '@/api/tourCourse.ts';
 import { getApiErrorMessage } from '@/api/types.ts';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock.ts';
+import { useIsDesktop } from '@/hooks/useMediaQuery.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { toast } from '@/stores/toastStore.ts';
@@ -33,6 +35,22 @@ const formatDate = (date: Date | null): string | null => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+/**
+ * R10 · 검색바 한 칸의 껍데기.
+ *
+ * 모바일에서는 5개 칸이 `border-base-100 bg-base-100`(= 카드 배경과 동일) 이라 "눌러야 할 곳"
+ * 이라는 단서가 전혀 없었다 — 칸을 갈라 주던 `w-px` 구분선마저 `hidden lg:block` 이라
+ * **모바일에서만** 사라져 텍스트 목록처럼 보였다. 좁은 폭에서만 테두리 + 48px 최소 높이를
+ * 줘 입력 컨트롤로 읽히게 한다. `lg` 이상은 2026-08-08 에 다듬은 알약형 검색바 그대로다
+ * (`lg:` 로 테두리·라운드·최소높이를 전부 되돌린다).
+ *
+ * 껍데기(≥48px)가 통째로 눌리는 것처럼 보이는데 실제 트리거는 22px 짜리 `<button>` 하나다 →
+ * 트리거에 R8 의 `.tap-44` 를 얹어 **보이는 상자와 실제 히트 영역을 일치**시킨다(위쪽은 비대화형
+ * 라벨, 아래쪽은 칸 사이 여백이라 이웃 탭 대상을 가로채지 않는다 — R8 사용 조건 ②).
+ */
+const FIELD_SHELL =
+  'flex min-h-12 flex-1 items-center gap-2 rounded-xl border border-base-300 px-3 py-2 transition focus-within:border-primary lg:min-h-0 lg:rounded-none lg:border-0 lg:px-3 lg:py-0 lg:transition-none lg:focus-within:border-transparent';
 
 /**
  * 이동수단 선택지. 백엔드 TransportType enum 은 WALK 도 갖지만 코스 단위 이동수단으로는
@@ -59,7 +77,7 @@ const DateTrigger = forwardRef<
       ref={ref}
       type="button"
       onClick={onClick}
-      className="flex w-full min-w-0 cursor-pointer items-center rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
+      className="relative tap-44 flex w-full min-w-0 cursor-pointer items-center rounded-lg border border-base-100 bg-base-100 text-left text-sm font-medium transition hover:border-base-300"
     >
       <span
         className={cn(
@@ -90,15 +108,21 @@ export default function Index() {
   const [transport, setTransport] = useState<Transport>('CAR');
   const [isTransportDropdownOpen, setIsTransportDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const destinationDropdownRef = useRef<HTMLDivElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
   const transportDropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const isDesktop = useIsDesktop();
   const [startDate, endDate] = dateRange;
   const sigunguList = useSigunguStore((state) => state.sigunguList);
   const getSigunguLabel = useSigunguStore((state) => state.getSigunguLabel);
   const themeList = useTravelThemeStore((state) => state.themeList);
   const getThemeLabel = useTravelThemeStore((state) => state.getThemeLabel);
+
+  // R10 · 모바일 달력은 `withPortal` 로 전체화면 오버레이가 된다 → R5 규칙대로 배경 스크롤 잠금.
+  // 데스크톱 팝오버는 오버레이가 아니므로 잠그지 않는다.
+  useBodyScrollLock(!isDesktop && isCalendarOpen);
 
   useEffect(() => {
     const handleDocumentClick = (event: MouseEvent) => {
@@ -248,7 +272,7 @@ export default function Index() {
         </div>
         <div className="flex w-full max-w-6xl flex-col gap-3 rounded-2xl bg-base-100 p-3 shadow-lg lg:flex-row lg:items-center lg:gap-2 lg:rounded-full lg:p-4">
           {/* 목적지 */}
-          <div className="flex flex-1 items-center gap-2 px-3 lg:flex-[1.3] lg:px-3">
+          <div className={cn(FIELD_SHELL, 'lg:flex-[1.3]')}>
             <MapPin size={20} className="shrink-0 text-base-content/40" />
             <div ref={destinationDropdownRef} className="w-full min-w-0">
               <div className="text-xs font-semibold text-base-content/60">
@@ -262,7 +286,7 @@ export default function Index() {
                     setIsTransportDropdownOpen(false);
                     setIsDestinationDropdownOpen((current) => !current);
                   }}
-                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
+                  className="relative tap-44 flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-sm font-medium transition hover:border-base-300"
                 >
                   <span
                     className={cn(
@@ -321,7 +345,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 일정 */}
-          <div className="flex flex-1 items-center gap-2 px-3 lg:px-3">
+          <div className={FIELD_SHELL}>
             <Calendar size={20} className="shrink-0 text-base-content/40" />
             <div className="w-full">
               <div className="text-xs font-semibold text-base-content/60">
@@ -340,6 +364,11 @@ export default function Index() {
                 dateFormat="MM/dd"
                 customInput={<DateTrigger />}
                 calendarClassName="custom-datepicker-calendar"
+                // 좁은 화면에서는 기본 팝오버가 검색바 옆에 붙어 좌우로 잘린다 →
+                // 전체화면 포털로 띄우고(`index.css` 에서 셀을 44px 로 키운다) 데스크톱은 종전 팝오버.
+                withPortal={!isDesktop}
+                onCalendarOpen={() => setIsCalendarOpen(true)}
+                onCalendarClose={() => setIsCalendarOpen(false)}
               />
             </div>
           </div>
@@ -347,7 +376,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 인원 */}
-          <div className="flex flex-1 items-center gap-2 px-3 lg:px-3">
+          <div className={FIELD_SHELL}>
             <Users size={20} className="shrink-0 text-base-content/40" />
             <div className="w-full">
               <div className="text-xs font-semibold text-base-content/60">
@@ -394,7 +423,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 이동수단 */}
-          <div className="relative flex flex-1 items-center gap-2 px-3 lg:px-3">
+          <div className={cn(FIELD_SHELL, 'relative')}>
             <Car size={20} className="shrink-0 text-base-content/40" />
             <div ref={transportDropdownRef} className="w-full min-w-0">
               <div className="text-xs font-semibold text-base-content/60">
@@ -408,7 +437,7 @@ export default function Index() {
                     setIsThemeDropdownOpen(false);
                     setIsTransportDropdownOpen((current) => !current);
                   }}
-                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
+                  className="relative tap-44 flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-sm font-medium transition hover:border-base-300"
                 >
                   <span className="block min-w-0 flex-1 truncate text-base-content">
                     {transportLabel}
@@ -458,7 +487,7 @@ export default function Index() {
           <div className="hidden h-12 w-px bg-base-content/20 lg:block"></div>
 
           {/* 테마 선택 */}
-          <div className="relative flex flex-1 items-center gap-2 px-3 lg:flex-[1.3] lg:px-3">
+          <div className={cn(FIELD_SHELL, 'relative lg:flex-[1.3]')}>
             <TableProperties size={20} className="shrink-0 text-base-content/40" />
             <div ref={themeDropdownRef} className="w-full min-w-0">
               <div className="text-xs font-semibold text-base-content/60">
@@ -472,7 +501,7 @@ export default function Index() {
                     setIsTransportDropdownOpen(false);
                     setIsThemeDropdownOpen((current) => !current);
                   }}
-                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-xs font-medium transition hover:border-base-300 sm:text-sm"
+                  className="relative tap-44 flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-base-100 bg-base-100 text-left text-sm font-medium transition hover:border-base-300"
                 >
                   <span
                     className={cn(
