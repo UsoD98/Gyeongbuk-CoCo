@@ -78,8 +78,7 @@ export default function Login() {
         email: email.trim(),
         password,
       });
-      // 로컬(이메일) 로그인 — 비밀번호를 가진 계정임을 마이페이지가 알 수 있게 남긴다.
-      setAuth(accessToken, userId, 'local');
+      setAuth(accessToken, userId);
       toast.success('로그인되었습니다.');
       navigate(redirectTo, { replace: true });
     } catch (error) {

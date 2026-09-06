@@ -7,7 +7,6 @@ import Skeleton from '@/components/common/Skeleton.tsx';
 import DangerZone from '@/components/user/DangerZone.tsx';
 import NicknameForm from '@/components/user/NicknameForm.tsx';
 import PasswordForm from '@/components/user/PasswordForm.tsx';
-import SocialPasswordNotice from '@/components/user/SocialPasswordNotice.tsx';
 import { MISSING_USER_ID_MESSAGE, useUser } from '@/hooks/useUser.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 import { toast } from '@/stores/toastStore.ts';
@@ -19,8 +18,6 @@ import { toast } from '@/stores/toastStore.ts';
  * 회원 정보 조회(GBC006)는 화면에 카드로 보여 주지 않지만 계속 부른다 — 닉네임 입력의
  * 현재값(그리고 탈퇴 확인 문구의 계정 이름)이 서버 값이어야 하기 때문이다.
  *
- * 비밀번호 변경은 **로컬(이메일) 로그인 계정에만** 띄운다(`authStore.provider`).
- *
  * 이 화면의 모든 API는 `{userId}` 경로변수를 요구하고, 그 값은 accessToken의
  * `userId` 클레임에서 온다(`authStore.userId`). 클레임이 없는 구버전 토큰이면
  * 호출 자체가 불가능하므로 재로그인을 안내한다.
@@ -29,9 +26,6 @@ export default function MyPage() {
   const navigate = useNavigate();
   const userId = useAuthStore((state) => state.userId);
   const clearAuth = useAuthStore((state) => state.clear);
-  // 카카오로 들어온 계정은 로컬 비밀번호가 없어 변경 폼 대신 안내를 띄운다.
-  // provider 가 null(구버전 저장값 없음)이면 제한하지 않고 서버 판단에 맡긴다.
-  const provider = useAuthStore((state) => state.provider);
   const { data, loading, error, reload } = useUser();
 
   /** 인증을 비우고 로그인 화면으로. 비밀번호 변경 후·userId 부재 시 공통 경로. */
@@ -51,7 +45,7 @@ export default function MyPage() {
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-base-content">마이페이지</h1>
         <p className="text-sm text-base-content/60">
-          닉네임·로그인 정보를 관리하고 계정을 정리할 수 있어요.
+          닉네임과 비밀번호를 바꾸거나 계정을 정리할 수 있어요.
         </p>
       </header>
 
@@ -93,17 +87,13 @@ export default function MyPage() {
                 currentNickname={data.nickname}
                 onUpdated={reload}
               />
-              {provider === 'kakao' ? (
-                <SocialPasswordNotice />
-              ) : (
-                <PasswordForm
-                  onChanged={() =>
-                    void signOutTo(
-                      '비밀번호를 변경했어요. 새 비밀번호로 다시 로그인해 주세요.',
-                    )
-                  }
-                />
-              )}
+              <PasswordForm
+                onChanged={() =>
+                  void signOutTo(
+                    '비밀번호를 변경했어요. 새 비밀번호로 다시 로그인해 주세요.',
+                  )
+                }
+              />
               <DangerZone nickname={data.nickname} />
             </>
           )}
