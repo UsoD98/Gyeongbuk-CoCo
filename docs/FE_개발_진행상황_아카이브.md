@@ -110,6 +110,27 @@
 
 ---
 
+- [x] `☑` **R5 · 오버레이 스크롤 체이닝 + 하단 안전영역** 🟠 중요 — **DoD 충족**(2026-09-06). 의존: 없음.
+  - **증상 3가지**: ①네 오버레이(`PoiDrawer`·`ConfirmDialog`·`LoginGateModal`·`SettleModal`) 모두 body 스크롤 락도 `overscroll-behavior` 도 없어, 바텀시트 내용을 끝까지 스크롤하면 그 관성이 뒤 페이지로 넘어가고 닫으면 엉뚱한 위치에 있다(iOS 에서 두드러짐). ②프로젝트 전체에 `env(safe-area-inset-*)` 사용이 **0건** → 드로어 하단 액션 바(`닫기`/`Day N에 추가`)가 iOS 홈 인디케이터에 물린다. ③바텀시트에 grabber 가 없어 "여기가 시트 상단"이라는 단서가 없다.
+  - **수정 1 — `hooks/useBodyScrollLock.ts` 신설**: `body{overflow:hidden}` 은 **iOS Safari 가 무시**하므로 `position:fixed; top:-scrollY; left/right:0; width:100%` 로 화면에 고정한다 — 보이는 그림은 그대로인 채 문서가 더 이상 스크롤되지 않고, 풀 때 그 y 로 되돌리면 원래 자리로 정확히 복귀한다. 오버레이는 겹쳐 열릴 수 있어(드로어 위 로그인 게이트) **모듈 스코프 카운터**로 세어 **처음 하나가 걸고 마지막 하나가 푼다** — 중간에 하나만 닫혔다고 배경이 풀리면 남은 오버레이 뒤가 다시 움직인다. `body` 를 고정하면 사라지는 문서 스크롤바 폭(`innerWidth - documentElement.clientWidth`)은 `paddingRight` 로 메워 데스크톱 콘텐츠가 튀지 않게 했다. 되돌릴 인라인 스타일은 `MANAGED` 배열 한 곳에서 관리해 원래 값(대개 빈 문자열)을 그대로 복원한다.
+  - **수정 2 — 적용처 4곳**: 사양이 지목한 세 오버레이에 **`SettleModal` 을 더했다** — 같은 계열(`fixed inset-0` + `role=dialog`)이라 빼면 예산 탭에서만 배경이 움직인다. 각 컴포넌트는 `if (!open) return null` **앞에서** 훅을 부른다(훅 순서 고정). `PoiDrawer` 는 열림 플래그가 아니라 **렌더 조건과 같은 값**(`drawer.open && drawer.poiId && poi`)을 넘긴다 — 데이터 대기 중 아무것도 안 보이는데 배경만 굳는 것을 막기 위해서다. `SettleModal` 은 열렸을 때만 마운트되는 구조라 `useBodyScrollLock(true)`.
+  - **수정 3 — `overscroll-contain`**: 드로어 본문 스크롤 컨테이너에. body 고정만으로도 문서로의 체이닝은 구조적으로 불가능하지만, 중간 스크롤 컨테이너로의 전파와 pull-to-refresh 까지 막는 짝이다.
+  - **수정 4 — grabber**: 사진 위 상단 중앙에 40×4 흰 반투명 pill(`bg-base-100/80 shadow-sm`, `aria-hidden`, `lg:hidden`). 우측 패널인 데스크톱에는 없다.
+  - **수정 5 — 안전영역**: `index.html` viewport 에 `viewport-fit=cover`. cover 는 노치 아래까지 그리는 대신 **안전영역을 각자 피하게** 만들므로 세 자리를 함께 손봤다 — 드로어 액션 바(`p-4` → `px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]`)·푸터(같은 규칙)·셸(`Layout` 래퍼에 좌우 `env(safe-area-inset-left/right)` — 가로 모드 노치). 세 곳 다 inset 0 에서는 종전 값과 같아 비노치 기기에는 영향이 없다.
+  - **검증**: `npm run lint`·`npm run build`(tsc 포함) 통과 + dist CSS 에 `env(safe-area-inset-*)` 8건·`overscroll-behavior:contain` 2건 emit 확인. **390×731 동일 출처 iframe 하니스**(dev :5173). 백엔드가 이번엔 전 엔드포인트에 401 을 내 코스는 `plannerStore.loadFromApi` 로 주입했고, 컬렉션은 R4 와 같이 `apiClient.defaults.adapter` 를 **런타임에만** 갈아 끼워 GBC011 목록을 대역했다(**코드 미변경**).
+    - **네 오버레이 전부** — 열림 중 `body{position:fixed}` + 문서 비스크롤이고, 스크립트 `scrollTo` 와 `wheel` **어느 쪽으로도** 배경 `scrollY` 가 움직이지 않으며, 닫으면 원위치로 복귀한다(드로어 120 · 정산 140 · 삭제 확인 100 · 데스크톱 **41.6px 소수점까지**). 닫힌 뒤 `body` 인라인 스타일은 **빈 문자열로 완전 정리**된다.
+    - **겹침 시나리오** — 드로어(락 1) → 로그인 게이트(락 2) → **게이트만 닫음**: 배경이 `fixed`·`top:-120px` 그대로 유지된다. 드로어까지 닫아야 120 으로 복귀 → 카운팅이 의도대로 동작.
+    - **체이닝** — 드로어 본문을 904/338 오버플로 상태로 만들어 끝까지 스크롤(`scrollTop 564.8 = 904-338`)한 뒤 추가 `wheel` 5회를 던져도 배경 `scrollY 0`·`body.top -120px` 불변. 컨테이너 `overscroll-behavior` 실측 `contain`.
+    - **기하** — 시트 top 80 / bottom 731.2(뷰포트와 일치), grabber 40×4 @ 시트 상단 +8px(스크린샷으로도 확인), 액션 바 `padding-bottom` **16px**. 이 16px 자체가 규칙이 적용됐다는 증거다 — `p-4` 를 `px-4 pt-4` 로 쪼갰으므로 새 규칙이 없으면 0 이 된다(inset 0 → `max(1rem, 0px)` = 16px).
+    - **스크롤바 보정** — 1280×420(세로로 넘치게)에서 gutter **15px** 측정 → 잠금 중 `padding-right:15px` 적용, `main` 우변 **1264.8 → 1265**(보정이 없으면 1280 으로 15px 튄다).
+    - **a11y 회귀 없음** — Escape·오버레이 클릭·X 버튼 **세 경로 모두** 닫히고 잠금이 풀린다(`ConfirmDialog` 는 Escape·오버레이 클릭으로, `PoiDrawer` 는 세 경로 전부 확인). `role`/`aria-modal`/`aria-label` 불변.
+    - **R4 회귀 없음** — 390/320/1280 세 폭 모두 가로 스크롤 0, 셸 좌우 패딩 0px·푸터 하단 16px(inset 0 기준 종전과 동일).
+  - **⏳ 미검증**: 데스크톱 Chrome 은 `env(safe-area-inset-*)` 가 전부 0 이라 **0 아닌 실제 노치 기기에서의 이동량**은 확인하지 못했다 → 사용자 실기기 확인 필요.
+  - **⏳ 범위 밖으로 판단해 미구현 — 스와이프 다운 닫기**: 사양이 "선택 범위 — 착수 시 판단해 기록"으로 둔 항목이다. **넣지 않기로 했다.** 근거 — ①닫는 수단이 이미 셋(X 버튼·오버레이 클릭·Escape)이고 grabber 로 "시트 상단" 단서는 확보됐다 ②자동화 탭은 `visibilityState:'hidden'` 이라 rAF 가 동결돼 **실제 손 제스처를 만들 수 없다**(R1·R2·R3 에서 확정된 하니스 한계) → 드래그 임계값·관성·`touch-action` 상호작용을 **검증 없이** 넣게 된다 ③그 위험이 특히 큰 이유는 R1 이 방금 `touch-none` 오용으로 막혀 있던 스크롤을 고쳤기 때문이다 — 시트에 제스처 핸들러를 얹으면 같은 종류의 회귀를 부르기 쉽다. 실기기 검증 수단이 생기면 재검토한다.
+  - **⚠️ 하니스 관찰(제품 결함 아님)**: 자동화 탭에서는 CSS 등장 애니메이션(`coco-slide-up`)이 **첫 프레임에 얼어붙어** 시트가 24px 아래(`translateY(24px)`·`opacity 0`)에 머문다. 기하 측정 시 `animation:none` 으로 무력화했다(레이아웃 규칙은 불변). 같은 원인으로 R2·R3 에서 기록한 rAF 동결과 한 뿌리다.
+
+---
+
 ## 2. 진행 로그 (2026-07-17 ~ 2026-08-22)
 
 > 보드에는 **최근 회차(2026-08-29~)** 만 남기고 그 이전 전량을 여기로 옮겼다. 형식은 원문 그대로.
@@ -210,6 +231,8 @@
 > 이전 업데이트: 2026-08-08 (A3 · 문서 드리프트 최신화 완료 — `CLAUDE.md`(디렉터리 트리 `api/`·`hooks/` "비어 있음" 정정 + 핵심 파일에 `api/client.ts`·`hooks/useAsync.ts` 추가), `PRD_FRONT.md`(§5 구현 매핑 표를 S1~S7 완료·실제 파일/스토어/훅 목록으로 갱신 + 상단·§5에 보드가 구현 현황 정본이라는 포인터), `FEATURES_FRONT.md`(상단에 인라인 구현 표기가 기준일 스냅샷임을 경고 + 보드 포인터). 소스 무변경(문서만) → lint·build 영향 없음)
 > 이전 업데이트: 2026-08-08 (A1 · `/home` 더미 라우트 제거 완료 — `router.tsx`에서 `Home` lazy import·`home` 라우트 블록 삭제 + `src/pages/Home.tsx`(반응형 레이아웃 테스트용 더미) 삭제. `/home`로의 링크·네비게이션 없음 확인(다른 `Home` 참조는 lucide 아이콘으로 무관). lint·build 통과)
 > 이전 업데이트: 2026-08-08 (S7 · GBC014 공유+공개뷰 완료 — `getPublicCourse`(순수 axios, 인터셉터 우회)+`shareRouter`(가드 밖 `/share/:id`)+`Share` 읽기전용 공개뷰+`useCourseShare`(카카오 공유 SDK 시도→실패 시 클립보드 폴백)+`kakaoShare`/`courseFormat` 유틸. lint·build 통과. 5173 라이브: 가드 밖·비로그인 401 미발생·에러 UI 검증. 해피패스 데이터 렌더는 백엔드 AI 생성 500 아웃티지로 보류(복구 시 재확인))
+
+> 이전 업데이트: 2026-09-06 (**📱 R2·R3 완료 `☑`** — 모바일 플래너의 데스크톱·모바일 트리 동시 마운트를 `useMediaQuery` 로 제거하고, 세 패널을 상시 마운트 + `hidden` 전환으로 바꿔 탭 왕복에도 탐색 상태가 유지된다. 상세는 [아카이브 §1](./FE_개발_진행상황_아카이브.md).)
 
 ---
 
