@@ -55,17 +55,26 @@ function CourseCard({
             {course.title?.trim() || 'AI 추천 코스'}
           </h3>
 
+          {/*
+            320px 에서는 기간 한 줄이 다 안 들어간다 — 날짜와 '2박 3일'이 각자 글자 단위로
+            접혀 '2박 3 / 일'처럼 쪼개졌다. 조각마다 줄바꿈을 막고 조각 사이에서만
+            줄을 바꾼다(R4).
+          */}
           <div className="flex flex-col gap-1.5 text-sm text-base-content/70">
-            <span className="flex items-center gap-1.5">
-              <Calendar size={15} className="text-base-content/40" />
-              {formatDate(course.startDate)} ~ {formatDate(course.endDate)}
-              <span className="text-base-content/50">
+            <span className="flex flex-wrap items-center gap-x-1.5">
+              <Calendar size={15} className="shrink-0 text-base-content/40" />
+              <span className="whitespace-nowrap">
+                {formatDate(course.startDate)} ~ {formatDate(course.endDate)}
+              </span>
+              <span className="whitespace-nowrap text-base-content/50">
                 · {tripDuration(course.startDate, course.endDate)}
               </span>
             </span>
-            <span className="flex items-center gap-1.5">
-              <Users size={15} className="text-base-content/40" />
-              {course.peopleCount}명 · {TRANSPORT_LABEL[course.transport]}
+            <span className="flex flex-wrap items-center gap-x-1.5">
+              <Users size={15} className="shrink-0 text-base-content/40" />
+              <span className="whitespace-nowrap">
+                {course.peopleCount}명 · {TRANSPORT_LABEL[course.transport]}
+              </span>
             </span>
           </div>
 

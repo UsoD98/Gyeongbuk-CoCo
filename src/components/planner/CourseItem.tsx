@@ -131,7 +131,11 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
               <X size={15} />
             </button>
           </div>
-          <div className="flex items-center gap-1.5">
+          {/*
+            320px 에서는 배지 + 시각·체류시간이 한 줄에 안 들어가 시각이 '0…' 으로 잘렸다
+            → 줄바꿈으로 흘린다(R4).
+          */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <CatBadge cat={poi.cat} />
             {/* 방문 시각·체류시간 편집(F1). 시각이 없으면 운영시간을 대신 보여준다. */}
             {!editingTime && (
