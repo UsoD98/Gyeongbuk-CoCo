@@ -8,6 +8,7 @@ import plannerRouter from '@/routes/plannerRouter.tsx';
 import collectionRouter from '@/routes/collectionRouter.tsx';
 import authRouter from '@/routes/authRouter.tsx';
 import shareRouter from '@/routes/shareRouter.tsx';
+import userRouter from '@/routes/userRouter.tsx';
 
 const LoadingComponent = <Loading />;
 const Index = lazy(() => import('@/pages/Index'));
@@ -43,7 +44,7 @@ const router = createBrowserRouter([
       {
         // 로그인 필수 영역. pathless 라우트로 Layout 안에서 가드만 추가한다.
         element: <RequireAuth />,
-        children: [...collectionRouter],
+        children: [...collectionRouter, ...userRouter],
       },
     ],
   },

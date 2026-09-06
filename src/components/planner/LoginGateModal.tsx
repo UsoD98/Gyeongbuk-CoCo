@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Bookmark, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock.ts';
+
 /**
  * 저장/공유 게이트. 게스트가 저장/공유를 누르면 열린다.
  * 라우트는 게스트 허용이고, 인증은 이 액션 시점에서만 요구한다.
@@ -27,6 +29,10 @@ export default function LoginGateModal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // 게이트가 떠 있는 동안 뒤 페이지가 스크롤되지 않게 한다. 드로어 위에 겹쳐 열릴 수 있어
+  // 훅의 카운팅이 필요한 대표 사례다(R5).
+  useBodyScrollLock(open);
 
   if (!open) return null;
 

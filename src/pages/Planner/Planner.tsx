@@ -16,6 +16,7 @@ import { useCourseDetail } from '@/hooks/useCourseDetail.ts';
 import { useCourseSave } from '@/hooks/useCourseSave.ts';
 import { useCourseShare } from '@/hooks/useCourseShare.ts';
 import { useCourseUpdate } from '@/hooks/useCourseUpdate.ts';
+import { useIsDesktop } from '@/hooks/useMediaQuery.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { useAuthStore } from '@/stores/authStore.ts';
 import { useLoginGateStore } from '@/stores/loginGateStore.ts';
@@ -57,6 +58,13 @@ export default function Planner() {
   const { sharing, share } = useCourseShare();
 
   const [tab, setTab] = useState<MobileTab>('results');
+  // R2 · 데스크톱·모바일 트리 중 **한쪽만 마운트**한다. 전에는 둘 다 렌더하고 CSS 로만
+  // 감췄던 탓에 모바일에서도 데스크톱 쪽 ResultsPanel·MapView 가 살아 KakaoMap 인스턴스가
+  // 2개(하나는 크기 0 컨테이너) 생기고 `GET /poi` 가 중복으로 나갔다.
+  // ⚠️ 트리를 갈아끼우므로 폭 경계(1024px)를 넘나들면 **컴포넌트 로컬 state 는 초기화**된다
+  //    (결과 패널의 뷰모드·카테고리 등). 스토어 상태(plannerStore 의 활성 Day·드로어·코스
+  //    편집분)는 트리 밖에 있어 그대로 유지된다.
+  const isDesktop = useIsDesktop();
   // 로그인 게이트는 전역 스토어(loginGateStore)로 승격 — 저장/공유뿐 아니라 결과 카드·드로어의
   // 찜 버튼(GBC019)도 깊은 트리에서 게이트를 열 수 있게 한다. 모달은 여기서 한 번만 렌더.
   const gateOpen = useLoginGateStore((s) => s.open);
@@ -180,68 +188,98 @@ export default function Planner() {
     </div>
   );
 
+  const desktopTree = (
+    /* 데스크톱: 코스(좌, 360px) · 결과(우, 1fr) 그리드 + 예산 섹션 */
+    <div className="flex flex-col gap-5">
+      {summary}
+      <PlannerDndProvider>
+        <div className={PANEL_GRID}>
+          <div className={cn(PANEL_CARD, PANEL_H)}>
+            <CoursePanel />
+          </div>
+          <div className={cn(PANEL_CARD, PANEL_H)}>
+            <ResultsPanel />
+          </div>
+        </div>
+      </PlannerDndProvider>
+      <div className={cn(PANEL_CARD, 'p-5')}>
+        <BudgetDashboard
+          onSave={onSave}
+          onShare={onShare}
+          saving={savePending}
+          saved={saveDone}
+          saveLabel={saveLabel}
+        />
+      </div>
+    </div>
+  );
+
+  const mobileTree = (
+    /* 모바일: 세그먼트 탭 (결과 · 코스 N · 예산) */
+    <div className="flex flex-col gap-4">
+      {summary}
+      <div role="tablist" className="tabs tabs-box grid grid-cols-3">
+        {(
+          [
+            ['results', '결과'],
+            ['course', `코스 ${courseCount}`],
+            ['budget', '예산'],
+          ] as const
+        ).map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            className={cn('tab', tab === k && 'tab-active')}
+            onClick={() => setTab(k)}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      {/*
+        R3 · 세 패널을 **모두 마운트**해 두고 `hidden` 으로만 전환한다. 전에는
+        `{tab === 'results' && <ResultsPanel/>}` 형태의 조건부 렌더라 탭을 떠나는 순간
+        언마운트되어 뷰모드·카테고리 칩·'더 보기' 누적 개수·리스트 스크롤 위치·지도
+        줌/중심이 통째로 초기화됐다(모바일은 탭 왕복이 잦아 체감이 크다).
+        숨은 동안 컨테이너가 0×0 이 되는 지도는 `KakaoMap` 이 컨테이너 크기 변화를
+        감지해 `relayout()` 으로 되살린다.
+      */}
+      <div className={cn(PANEL_CARD, 'h-[70vh]')}>
+        <div
+          className={cn(
+            'h-full min-h-0 flex-col',
+            tab === 'results' ? 'flex' : 'hidden',
+          )}
+        >
+          <ResultsPanel mobile />
+        </div>
+        <div
+          className={cn(
+            'h-full min-h-0 flex-col',
+            tab === 'course' ? 'flex' : 'hidden',
+          )}
+        >
+          <PlannerDndProvider mobile>
+            <CoursePanel mobile />
+          </PlannerDndProvider>
+        </div>
+        <div
+          className={cn(
+            'h-full min-h-0 overflow-y-auto p-4',
+            tab === 'budget' ? 'block' : 'hidden',
+          )}
+        >
+          <BudgetDashboard compact onSave={onSave} onShare={onShare} />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      {/* 데스크톱: 코스(좌, 360px) · 결과(우, 1fr) 그리드 + 예산 섹션 */}
-      <div className="hidden flex-col gap-5 lg:flex">
-        {summary}
-        <PlannerDndProvider>
-          <div className={PANEL_GRID}>
-            <div className={cn(PANEL_CARD, PANEL_H)}>
-              <CoursePanel />
-            </div>
-            <div className={cn(PANEL_CARD, PANEL_H)}>
-              <ResultsPanel />
-            </div>
-          </div>
-        </PlannerDndProvider>
-        <div className={cn(PANEL_CARD, 'p-5')}>
-          <BudgetDashboard
-            onSave={onSave}
-            onShare={onShare}
-            saving={savePending}
-            saved={saveDone}
-            saveLabel={saveLabel}
-          />
-        </div>
-      </div>
-
-      {/* 모바일: 세그먼트 탭 (결과 · 코스 N · 예산) */}
-      <div className="flex flex-col gap-4 lg:hidden">
-        {summary}
-        <div role="tablist" className="tabs tabs-box grid grid-cols-3">
-          {(
-            [
-              ['results', '결과'],
-              ['course', `코스 ${courseCount}`],
-              ['budget', '예산'],
-            ] as const
-          ).map(([k, l]) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              className={cn('tab', tab === k && 'tab-active')}
-              onClick={() => setTab(k)}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <div className={cn(PANEL_CARD, 'h-[70vh]')}>
-          {tab === 'results' && <ResultsPanel mobile />}
-          {tab === 'course' && (
-            <PlannerDndProvider mobile>
-              <CoursePanel mobile />
-            </PlannerDndProvider>
-          )}
-          {tab === 'budget' && (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <BudgetDashboard compact onSave={onSave} onShare={onShare} />
-            </div>
-          )}
-        </div>
-      </div>
+      {isDesktop ? desktopTree : mobileTree}
 
       <PoiDrawer />
       <LoginGateModal open={gateOpen} label={gateLabel} onClose={closeGate} />

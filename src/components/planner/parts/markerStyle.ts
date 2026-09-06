@@ -33,10 +33,22 @@ export const MAP_PIN_SVG =
  * 배지 오른쪽 아래에 겹쳐 둔다 — 배지 자체의 위치·크기를 건드리지 않아 좌표 앵커가 그대로다.
  * 터치 목표를 확보하려고 배지(28px)보다 조금 작은 22px 로 두고, 코스에 있으면 제거(빨강)·
  * 없으면 추가(브랜드색)로 색을 바꾼다.
+ *
+ * R8 · 히트박스는 **배지 반대편(오른쪽 아래)으로만** 10px 넓혀 22→32px 로 키운다.
+ * 44px 를 통째로 씌울 수는 없다 — 배지(28px)와 토글의 중심 거리가 13px 뿐이라
+ * 44px 상자는 배지를 거의 다 덮어 마커 탭(드로어 열기)을 먹고, `mapCluster` 가 보장하는
+ * 마커 간 최소 간격(`DEFAULT_MIN_SEPARATION_PX` = 40px)마저 넘어 이웃 마커까지 침범한다.
+ *
+ * ⚠️ `before:rounded-full` 은 장식이 아니라 **필수**다. 히트 판정은 `border-radius` 를 따르므로
+ * 배지·토글 둘 다 원형인 덕에 지금까지 배지 중심(대각선으로 토글 사각형 안이지만 원 밖)이
+ * 살아 있었다 — 사각형 확장으로 두면 그 지점을 토글이 가로채 **마커를 누르면 코스에서
+ * 빠지는** 회귀가 난다(하니스에서 재현 확인). 원으로 두면 확장 원의 중심이 배지 바깥
+ * (오른쪽 아래)으로 밀려나 배지를 건드리지 않는다.
  */
 export function markerToggleClass(inCourse: boolean): string {
   return cn(
     'absolute -bottom-1.5 -right-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-base-100 shadow ring-1 ring-base-300 transition-transform hover:scale-110',
+    "before:absolute before:top-0 before:left-0 before:-right-2.5 before:-bottom-2.5 before:rounded-full before:content-['']",
     inCourse ? 'text-error' : 'text-primary',
   );
 }

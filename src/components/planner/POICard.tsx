@@ -108,7 +108,12 @@ export default function POICard({
         <div className="absolute left-2 top-2">
           <CatBadge cat={poi.cat} />
         </div>
-        <div className="absolute right-2 top-2">
+        {/*
+          R8 · 하트를 모서리에서 한 칸 더(8→12px) 안으로 넣는다 — 카드가
+          `rounded-2xl`(16px) + `overflow-hidden` 이라 8px 자리에서는 44px 히트박스의
+          **오른쪽 위 모서리가 둥근 모서리에 잘려** 44×44 판정을 통과하지 못했다(실측).
+        */}
+        <div className="absolute right-3 top-3">
           <LikeButton poiId={poi.id} className="btn-sm" />
         </div>
       </div>

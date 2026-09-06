@@ -5,7 +5,9 @@
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/gbcoco-icon.jpg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: 노치·홈 인디케이터 영역까지 그린다. 그 대가로 안전영역은
+         각자 env(safe-area-inset-*) 로 피해야 한다 — Layout(좌우)·PoiDrawer 액션 바(하단). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>경북 CoCo</title>
   </head>
   <body>

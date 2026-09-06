@@ -357,7 +357,7 @@ export default function Index() {
                 <button
                   type="button"
                   onClick={() => setNumber(Math.max(1, number - 1))}
-                  className="rounded p-1 transition hover:bg-base-200"
+                  className="relative tap-44 rounded p-1 transition hover:bg-base-200"
                   aria-label="인원 감소"
                 >
                   <Minus size={16} className="text-base-content/40" />
@@ -382,7 +382,7 @@ export default function Index() {
                 <button
                   type="button"
                   onClick={() => setNumber(number + 1)}
-                  className="rounded p-1 transition hover:bg-base-200"
+                  className="relative tap-44 rounded p-1 transition hover:bg-base-200"
                   aria-label="인원 증가"
                 >
                   <Plus size={16} className="text-base-content/40" />

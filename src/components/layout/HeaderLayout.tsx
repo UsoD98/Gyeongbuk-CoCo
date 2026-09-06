@@ -22,6 +22,15 @@ export const Header = () => {
     setIsDrawerOpen(false);
   };
 
+  /**
+   * 계정 드롭다운은 daisyUI 의 포커스 기반이라 링크를 눌러 이동해도 열린 채 남는다.
+   * 메뉴에서 무언가를 고른 뒤에는 포커스를 해제해 함께 닫는다(모바일 드로어도 같이 정리).
+   */
+  const closeMenus = () => {
+    closeDrawer();
+    (document.activeElement as HTMLElement | null)?.blur();
+  };
+
   const handleLogout = async () => {
     try {
       await logoutApi();
@@ -29,15 +38,17 @@ export const Header = () => {
       // 서버 로그아웃이 실패해도 클라이언트 인증 상태는 비운다.
     } finally {
       clearAuth();
-      closeDrawer();
-      // 드롭다운을 닫기 위해 포커스 해제.
-      (document.activeElement as HTMLElement | null)?.blur();
+      closeMenus();
       toast.success('로그아웃되었습니다.');
       navigate('/');
     }
   };
 
   return (
+    /*
+      `.navbar` 는 index.css 에서 position:relative + z-index:30 을 받아 **스택 컨텍스트**가 된다
+      (z 계층 사다리는 그쪽 주석 참조). 따라서 아래 두 팝오버의 z 는 헤더 내부 순서일 뿐이다 — R7.
+    */
     <div className={cn('navbar', 'bg-primary', 'px-3 md:px-6', 'py-2 md:py-0')}>
       {/* 모바일 버거 메뉴 */}
       <div className={cn('md:hidden', 'flex', 'items-center')}>
@@ -117,23 +128,31 @@ export const Header = () => {
           </div>
           <ul
             tabIndex={-1}
-            className="dropdown-content menu z-1 mt-4 w-28 rounded-box bg-base-100 p-2 shadow-lg"
+            /* 모바일 메뉴(z-20)와 화면에서 겹치므로 헤더 안에서 그보다 위에 둔다. */
+            className="dropdown-content menu z-30 mt-4 w-32 rounded-box bg-base-100 p-2 shadow-lg"
           >
             {status === 'authenticated' ? (
-              <li>
-                <button type="button" onClick={handleLogout}>
-                  로그아웃
-                </button>
-              </li>
+              <>
+                <li>
+                  <NavLink to="/mypage/" onClick={closeMenus}>
+                    마이페이지
+                  </NavLink>
+                </li>
+                <li>
+                  <button type="button" onClick={handleLogout}>
+                    로그아웃
+                  </button>
+                </li>
+              </>
             ) : status === 'guest' ? (
               <>
                 <li>
-                  <NavLink to="/auth/login" onClick={closeDrawer}>
+                  <NavLink to="/auth/login" onClick={closeMenus}>
                     로그인
                   </NavLink>
                 </li>
                 <li>
-                  <NavLink to="/auth/register" onClick={closeDrawer}>
+                  <NavLink to="/auth/register" onClick={closeMenus}>
                     회원가입
                   </NavLink>
                 </li>
@@ -145,7 +164,7 @@ export const Header = () => {
 
       {/* 모바일 드롭다운 메뉴 */}
       {isDrawerOpen && (
-        <div className="absolute top-full left-0 right-0 md:hidden bg-primary border-t border-primary-600">
+        <div className="absolute top-full left-0 right-0 z-20 md:hidden bg-primary border-t border-primary-600">
           <div
             role="tablist"
             className={cn(

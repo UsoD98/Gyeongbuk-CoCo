@@ -131,13 +131,21 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
               <X size={15} />
             </button>
           </div>
-          <div className="flex items-center gap-1.5">
+          {/*
+            320px 에서는 배지 + 시각·체류시간이 한 줄에 안 들어가 시각이 '0…' 으로 잘렸다
+            → 줄바꿈으로 흘린다(R4).
+          */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <CatBadge cat={poi.cat} />
-            {/* 방문 시각·체류시간 편집(F1). 시각이 없으면 운영시간을 대신 보여준다. */}
+            {/*
+              방문 시각·체류시간 편집(F1). 시각이 없으면 운영시간을 대신 보여준다.
+              R8 · 글자 한 줄(≈16px)이라 실제 높이를 44px 로 준다 — 투명 히트박스로 넓히면
+              위(삭제 X 버튼)·아래(금액 트리거) 줄의 탭 대상을 덮어 오히려 도달성을 깎는다.
+            */}
             {!editingTime && (
               <button
                 type="button"
-                className="flex min-w-0 items-center gap-1 text-xs text-base-content/50"
+                className="flex min-h-11 min-w-0 items-center gap-1 text-xs text-base-content/50"
                 onPointerDown={stopDrag}
                 onClick={(e) => {
                   stopClick(e);
@@ -240,7 +248,7 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
             ) : (
               <button
                 type="button"
-                className="flex items-center gap-1"
+                className="flex min-h-11 items-center gap-1"
                 onPointerDown={stopDrag}
                 onClick={(e) => {
                   stopClick(e);
@@ -258,7 +266,7 @@ export default function CourseItem({ poi, n, dayIdx }: Props) {
             {edited && (
               <button
                 type="button"
-                className="text-xs text-base-content/50"
+                className="flex min-h-11 items-center text-xs text-base-content/50"
                 onPointerDown={stopDrag}
                 onClick={(e) => {
                   stopClick(e);

@@ -18,7 +18,15 @@ export default function CatBadge({
 }) {
   const m = META[cat];
   return (
-    <span className={cn('badge badge-sm border-0 font-semibold', m.cls, className)}>
+    <span
+      className={cn(
+        'badge badge-sm border-0 font-semibold',
+        // 좁은 폭(320px)에서 배지가 눌려 '관광 / 지'로 접히지 않게 한다(R4).
+        'shrink-0 whitespace-nowrap',
+        m.cls,
+        className,
+      )}
+    >
       {m.label}
     </span>
   );

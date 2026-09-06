@@ -49,23 +49,32 @@ function CourseCard({
         )}
       >
         <div className="flex flex-col gap-3">
-          {/* 우상단 삭제 버튼과 겹치지 않도록 제목에 우측 여백. */}
-          <h3 className="line-clamp-2 pr-9 text-lg font-bold text-base-content">
+          {/* 우상단 삭제 버튼과 겹치지 않도록 제목에 우측 여백(R8 로 히트박스가 44px 가 되어 pr-12). */}
+          <h3 className="line-clamp-2 pr-12 text-lg font-bold text-base-content">
             {/* AI 생성 코스는 제목이 비어 있다(제목 지정=GBC015 이후). 빈 제목 폴백. */}
             {course.title?.trim() || 'AI 추천 코스'}
           </h3>
 
+          {/*
+            320px 에서는 기간 한 줄이 다 안 들어간다 — 날짜와 '2박 3일'이 각자 글자 단위로
+            접혀 '2박 3 / 일'처럼 쪼개졌다. 조각마다 줄바꿈을 막고 조각 사이에서만
+            줄을 바꾼다(R4).
+          */}
           <div className="flex flex-col gap-1.5 text-sm text-base-content/70">
-            <span className="flex items-center gap-1.5">
-              <Calendar size={15} className="text-base-content/40" />
-              {formatDate(course.startDate)} ~ {formatDate(course.endDate)}
-              <span className="text-base-content/50">
+            <span className="flex flex-wrap items-center gap-x-1.5">
+              <Calendar size={15} className="shrink-0 text-base-content/40" />
+              <span className="whitespace-nowrap">
+                {formatDate(course.startDate)} ~ {formatDate(course.endDate)}
+              </span>
+              <span className="whitespace-nowrap text-base-content/50">
                 · {tripDuration(course.startDate, course.endDate)}
               </span>
             </span>
-            <span className="flex items-center gap-1.5">
-              <Users size={15} className="text-base-content/40" />
-              {course.peopleCount}명 · {TRANSPORT_LABEL[course.transport]}
+            <span className="flex flex-wrap items-center gap-x-1.5">
+              <Users size={15} className="shrink-0 text-base-content/40" />
+              <span className="whitespace-nowrap">
+                {course.peopleCount}명 · {TRANSPORT_LABEL[course.transport]}
+              </span>
             </span>
           </div>
 
@@ -91,6 +100,8 @@ function CourseCard({
         onClick={() => onDelete(course)}
         className={cn(
           'btn btn-ghost btn-sm btn-square absolute right-2.5 top-2.5 z-10',
+          // R8 · 32px 버튼의 히트박스를 44px 로. 제목 우측 여백(`pr-12`)이 그만큼 넓혀져 있다.
+          'tap-44',
           'text-base-content/40 hover:bg-error/10 hover:text-error',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error',
         )}

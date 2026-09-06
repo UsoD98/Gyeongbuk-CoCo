@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { readUserIdFromToken } from '@/utils/jwt.ts';
+
 /**
  * 인증 상태.
  * accessToken은 보안상 메모리에만 보관한다(localStorage 미사용).
@@ -27,8 +29,8 @@ export function hasSessionHint(): boolean {
 
 /**
  * 로그인 사용자 id. `{userId}` path 파라미터를 쓰는 회원 API(GBC006~009)의 선결값이다.
- * accessToken과 달리 민감정보가 아니고, 새로고침 후 reissue 응답이 userId를 실어주지 않을
- * 가능성(0-A 계약 미확정)에 대비해 localStorage에도 함께 보관해 세션 복원 시 즉시 사용한다.
+ * 정본은 accessToken의 `userId` 클레임이지만(`readUserIdFromToken`), 새로고침 직후
+ * 재발급이 끝나기 전 잠깐 토큰이 없는 구간이 있어 localStorage에도 함께 보관한다.
  * (accessToken은 보안상 메모리 전용이라는 원칙은 그대로 유지.) docs/FE_계약_추적표.md #userId
  */
 const USER_ID_KEY = 'gb-coco.userId';
@@ -59,8 +61,9 @@ interface AuthState {
   status: AuthStatus;
   /**
    * 로그인/카카오/재발급 성공 시 호출한다(기존 setAccessToken의 확장).
-   * userId를 생략하면(undefined) 기존 값을 유지한다 — reissue 응답에 userId가 없을 때 보존용.
-   * token이 없으면(로그아웃) userId도 함께 비운다.
+   * userId를 생략하면(undefined) **토큰 클레임에서 스스로 꺼낸다** — 응답 바디에 userId가
+   * 없어도 세 인증 경로(로그인·재발급·카카오)가 모두 채워지도록.
+   * 클레임도 없으면 기존 값을 유지하고, token이 없으면(로그아웃) userId도 함께 비운다.
    */
   setAuth: (token: string | null, userId?: number | null) => void;
   setStatus: (status: AuthStatus) => void;
@@ -78,12 +81,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     else localStorage.removeItem(SESSION_HINT_KEY);
 
     set((state) => {
-      // userId: undefined = 기존 유지 / number|null = 갱신. token이 없으면 무조건 null.
+      // userId 우선순위: 인자(명시) > 토큰 클레임 > 기존 값. token이 없으면 무조건 null.
+      // 인자를 남겨 둔 건 백엔드가 나중에 응답 바디로도 내려줄 때 그 값을 우선하기 위해서다.
       const nextUserId = !token
         ? null
-        : userId === undefined
-          ? state.userId
-          : userId;
+        : userId !== undefined
+          ? userId
+          : (readUserIdFromToken(token) ?? state.userId);
 
       if (nextUserId != null) {
         localStorage.setItem(USER_ID_KEY, String(nextUserId));

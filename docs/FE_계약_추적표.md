@@ -48,8 +48,14 @@ FE 가정을 백엔드 실제 소스(`../back/src/main/java/com/eodegano/cocobac
 - **Step 1 할 일**: FE `travelThemeStore` 코드(`001~004`)·목 id(`history` 등)를 **한국어 라벨**(자연/맛집/힐링/문화…)로 매핑해 전송. 코드 그대로 보내면 AI 품질 저하.
 - **S1 반영(2026-07-17)**: `getThemeLabel(code)`로 한국어 라벨(어드벤처/휴식/문화/음식) 배열 전송. 코드·목 id 미전송. `theme` 미선택 시 검색 차단(백엔드 `@NotEmpty` 대응).
 
-### 4. `userId` ⛔ (섬 M 블로커)
-- **현실**: 로그인/재발급/카카오 응답 DTO는 `LoginResponseDto{accessToken}`뿐. JWT는 `subject=email`+`role`만. `/user/me` 없음. 인증 엔드포인트는 전부 email(`Authentication.getName()`)로 사용자를 식별한다.
+### 4. `userId` ☑ 해결 (2026-09-06 · 안 ③ JWT 클레임)
+- **✅ 결론(2026-09-06)**: 백엔드가 **안 ③ — accessToken 클레임에 `userId` 추가**로 회신했다(`{userId: 1, role: "USER", ...}` 형태). 응답 DTO 변경이 없어 **로그인(GBC001)·재발급(GBC003)·카카오(GBC004) 세 경로가 한 번에** 해결된다.
+  - **FE 반영**: `utils/jwt.ts`(`decodeJwtPayload`·`readUserIdFromToken` — base64url 패딩 복원 + `TextDecoder` UTF-8) 신설, `authStore.setAuth(token)` 이 인자가 없으면 클레임에서 꺼낸다(우선순위 **인자 > 클레임 > 기존값**). 호출부(`Login`·`KakaoLoginComponent`·`reissueAccessToken`) **수정 0**.
+  - **주의**: FE 의 디코드는 **서명 검증이 아니다**. 화면 분기에만 쓰고 권한 판단은 서버에 맡긴다(매 요청 토큰 검증).
+  - **백엔드 반영 위치(참고)**: `JwtProvider.generateAccessToken` 이 현재 `(String email, String role)` 시그니처라 `userId` 파라미터 추가가 필요하다(`.subject(email).claim("role", role)` 옆에 `.claim("userId", ...)`).
+  - **하위호환**: 클레임이 없는 구버전 토큰이면 `userId` 가 null 이고, 마이페이지는 API 를 부르지 않고 **재로그인 안내**를 띄운다(무해).
+- **⚠️ 남은 백엔드 숙제(별건·보안)**: `UserServiceImpl` 의 `getUser`·`updateNickname`·`deleteUser` 가 경로변수 `userId` 만 믿고 **소유자 검증을 하지 않는다**(`Authentication` 미참조) → 로그인한 아무나 path 의 숫자를 바꾸면 남의 정보 조회·닉네임 변경·탈퇴가 가능하다. `updatePassword` 는 `currentPassword` 검증이 있어 상대적으로 안전.
+- **(이하 해결 전 기록)** **현실**: 로그인/재발급/카카오 응답 DTO는 `LoginResponseDto{accessToken}`뿐. JWT는 `subject=email`+`role`만. `/user/me` 없음. 인증 엔드포인트는 전부 email(`Authentication.getName()`)로 사용자를 식별한다.
 - **결과**: 회원 API `GET/PATCH/DELETE /user/{userId}`(Long userId 경로변수)를 부를 **자기 userId를 FE가 얻을 방법이 없음** → **섬 M(GBC006~009) 착수 불가**.
 - **영향 범위**: 코스 파이프라인(S1~S7)·POI 좋아요(P1)는 userId 불필요(백엔드가 email로 처리) → 정상 진행.
 - **필요 결정(백엔드 중 택1)**: ① `LoginResponseDto`+재발급에 `userId` 추가, ② `GET /user/me`(토큰 기반) 추가, ③ JWT에 userId 클레임 추가(FE 디코드).

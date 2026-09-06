@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, HandCoins, Users, X } from 'lucide-react';
 
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { won } from '@/utils/format.ts';
 import { KAKAO_PAY_URI, perPersonAmount } from '@/utils/kakaoPay.ts';
@@ -36,6 +37,9 @@ export default function SettleModal({ open, ...rest }: Props) {
 
 function SettleDialog({ onClose, total, perPerson, n }: Omit<Props, 'open'>) {
   const [copied, setCopied] = useState(false);
+
+  // 이 컴포넌트는 열렸을 때만 마운트된다 → 사는 동안 계속 잠근다(R5).
+  useBodyScrollLock(true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

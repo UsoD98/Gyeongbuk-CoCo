@@ -347,7 +347,7 @@
 > **점검 방법**: 레이아웃·플래너·오버레이 컴포넌트 정독 + 리스크 패턴 grep(`touch-none` · `vh`/`dvh` · `env(safe-area-*)` · 브레이크포인트 사용 분포 `lg:40 md:15 sm:18 xl:1`) + 마운트 구조 추적.
 > **결론**: 반응형 자체는 mobile-first 로 견고하다(2026-08-08 반응형 전면 점검의 판단은 지금도 유효). 다만 **그 점검 이후 들어온 기능**(지도·DnD·바텀시트·모바일 탭)에서 **모바일에서만 발생하는 결함 15건**이 생겼다. 심각도 3단계로 나눠 11개 Task 로 분해한다.
 > **심각도**: 🔴 심각 = 실제 조작이 막히거나 상태가 유실됨 · 🟠 중요 = 자주 부딪힘 · 🟡 개선 = 폴리시.
-> **권장 순서**: R1 → R2 → R3 → R4 → R5 → R6 → R7 → R8 → R9 → R10 → R11 (심각도 순. R3 은 R2 가 도입하는 `useMediaQuery` 위에, R6 은 R3 이 정리한 탭 렌더 구조 위에 얹힌다).
+> **권장 순서**: ~~R1~~ → ~~R2~~ → ~~R3~~ → ~~R4~~ → ~~R5~~ → ~~R6~~ → R7 → R8 → R9 → R10 → R11 (심각도 순. R3 은 R2 가 도입하는 `useMediaQuery` 위에, R6 은 R3 이 정리한 탭 렌더 구조 위에 얹힌다).
 > **공통 검증 하니스**: 브라우저 창 리사이즈가 이 환경에서 무효이므로(`innerWidth` 1440 고정), F5·F7 에서 확립한 **동일 출처 iframe 390×731** 하니스로 모바일 폭을 실측한다.
 
 ### Step R1 · 코스 카드 `touch-none` 으로 모바일 코스 탭 스크롤 불가 🔴 심각 ▶
@@ -383,11 +383,11 @@
 - **DoD**: 320px 폭에서 `document.documentElement.scrollWidth <= clientWidth`(가로 스크롤 0)이고, 주요 화면(홈·플래너 3탭·컬렉션·공유·로그인)에서 겹침·잘림이 없다.
 - **검증**: iframe 320×640 하니스로 각 화면 진입 → `scrollWidth`/`clientWidth` 비교 + 스크린샷 육안 확인.
 
-### Step R5 · 오버레이 스크롤 체이닝 + 하단 안전영역 🟠 중요 ▶
+### Step R5 · 오버레이 스크롤 체이닝 + 하단 안전영역 🟠 중요 ☑ (2026-09-06 완료)
 - **의존**: 없음
-- **파일**: `components/planner/PoiDrawer.tsx`, `components/common/ConfirmDialog.tsx`, `components/planner/LoginGateModal.tsx`, `hooks/useBodyScrollLock.ts`(신설), `index.html`, `src/index.css`
+- **파일**: `components/planner/PoiDrawer.tsx`, `components/common/ConfirmDialog.tsx`, `components/planner/LoginGateModal.tsx`, `hooks/useBodyScrollLock.ts`(신설), `index.html`, `src/index.css` — 실제 구현은 여기에 **`components/planner/SettleModal.tsx`**(같은 계열 오버레이라 빼면 예산 탭에서만 배경이 움직인다)와 **`components/layout/Layout.tsx`·`FooterLayout.tsx`**(`viewport-fit=cover` 가 만드는 좌우·하단 안전영역)를 더했고, `src/index.css` 는 손대지 않았다(전부 유틸 클래스로 해결).
 - **증상**: ①세 오버레이 모두 **body 스크롤 락이 없고** 스크롤 컨테이너에 `overscroll-behavior: contain` 이 없다 → 바텀시트 내용을 끝까지 스크롤하면 뒤 페이지가 따라 움직이고, 닫으면 엉뚱한 위치에 있다(iOS 에서 특히 두드러짐). ②프로젝트 전체에 `env(safe-area-inset-*)` 사용이 **0건** → `PoiDrawer` 하단 액션 바(`닫기` / `Day N에 추가`)가 iOS 홈 인디케이터에 물린다. ③바텀시트에 grabber(핸들 바)도 스와이프 다운 닫기도 없어, 사진 위 X 버튼이 유일한 닫기 수단이다.
-- **내용**: `useBodyScrollLock(open)` 훅 신설(열릴 때 `body` 스크롤 잠금 + 닫힘/언마운트 시 복원, 중첩 오버레이 카운팅). 드로어 본문 스크롤 컨테이너에 `overscroll-contain`. `index.html` viewport 에 `viewport-fit=cover` 추가 후 하단 액션 바에 `pb-[max(1rem,env(safe-area-inset-bottom))]`. 바텀시트 상단에 4px 회색 grabber 추가(장식이 아니라 "여기가 시트 상단"이라는 단서). 스와이프 다운 닫기는 **선택 범위** — 구현 난도 대비 효용을 착수 시 판단해 기록한다.
+- **내용**: `useBodyScrollLock(open)` 훅 신설(열릴 때 `body` 스크롤 잠금 + 닫힘/언마운트 시 복원, 중첩 오버레이 카운팅). 드로어 본문 스크롤 컨테이너에 `overscroll-contain`. `index.html` viewport 에 `viewport-fit=cover` 추가 후 하단 액션 바에 `pb-[max(1rem,env(safe-area-inset-bottom))]`. 바텀시트 상단에 4px 회색 grabber 추가(장식이 아니라 "여기가 시트 상단"이라는 단서). 스와이프 다운 닫기는 **선택 범위** — 구현 난도 대비 효용을 착수 시 판단해 기록한다. → **판단 결과(2026-09-06): 넣지 않는다.** 닫는 수단이 이미 셋(X·오버레이·Escape)이고 grabber 로 단서는 확보됐다. 반면 자동화 탭은 rAF 가 동결돼 실제 손 제스처를 만들 수 없어 드래그 임계값·관성·`touch-action` 상호작용을 검증 없이 넣게 되는데, R1 이 방금 `touch-none` 오용으로 막혀 있던 스크롤을 고친 직후라 같은 종류의 회귀 위험이 크다. 실기기 검증 수단이 생기면 재검토.
 - **DoD**: 오버레이가 열린 동안 배경이 스크롤되지 않고 닫으면 원래 스크롤 위치로 돌아온다. 하단 액션 바가 홈 인디케이터에 가리지 않는다. 바텀시트에 grabber 가 보인다. 세 오버레이 모두 기존 a11y(role/aria-modal/Escape/오버레이 클릭)는 유지.
 - **검증**: iframe 390px → POI 드로어 열고 본문 끝까지 스크롤 → 배경 `window.scrollY` 불변 확인 → 닫은 뒤 원위치. `ConfirmDialog`(코스 삭제)·`LoginGateModal`(비로그인 저장)도 같은 확인.
 
