@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Minus, Navigation, Plus } from 'lucide-react';
+import { Hand, Lock, Minus, Navigation, Plus } from 'lucide-react';
 
 import {
   DEFAULT_MIN_SEPARATION_PX,
@@ -35,7 +35,9 @@ import {
   markerToggleClass,
   markerToggleLabel,
 } from '@/components/planner/parts/markerStyle.ts';
+import { useIsDesktop } from '@/hooks/useMediaQuery.ts';
 import { toast } from '@/stores/toastStore.ts';
+import { cn } from '@/utils/cn.ts';
 import { GYEONGBUK_CENTER, loadKakaoMaps } from '@/utils/kakaoMap.ts';
 import type { KakaoMap as KakaoMapInstance, KakaoMaps, KakaoOverlay } from '@/utils/kakaoMap.ts';
 import type { Poi } from '@/types/planner.ts';
@@ -51,6 +53,12 @@ import type { Poi } from '@/types/planner.ts';
  *
  * 마커에는 코스 담기/빼기 토글(F6-a)이 붙는다. 오버레이는 `clickable: true` 라 클릭이 지도로
  * 새지 않으므로(pan/지도 클릭과 충돌 없음) 데스크톱·모바일에서 같은 방식으로 동작한다.
+ *
+ * 모바일에서는 지도를 **잠근 채로** 연다(R6) — `setDraggable(false)`/`setZoomable(false)`.
+ * 그러지 않으면 `h-[70vh]` 지도가 화면을 덮은 상태에서 세로 스와이프가 전부 pan 으로 먹혀
+ * 아래 예산 탭·푸터로 내려갈 수 없다. 조작이 필요하면 컨트롤 맨 위의 '지도 조작' 버튼으로
+ * 켜고, '지도 잠금' 으로 되돌린다(구글맵 임베드 관례의 명시 토글 판). 잠긴 동안에도
+ * 마커 탭(상세)·토글(담기/빼기)과 확대/축소·현위치 버튼은 종전대로 동작한다.
  *
  * 겹쳐서 서로를 가리는 POI 마커는 개수 배지 하나로 접는다(F7 · `mapCluster`). 코스 마커와
  * 열려 있는 마커는 접지 않는다 — 순번 배지·경로선을 유지해야 하고(F5), 방금 고른 장소가
@@ -82,6 +90,20 @@ export default function KakaoMap({
   const overlaysRef = useRef(new Map<string, OverlayEntry>());
   const lineRef = useRef<KakaoOverlay | null>(null);
   const [ready, setReady] = useState(false);
+  /**
+   * 지도 조작 활성 여부(R6). 데스크톱은 항상 활성 — 지도가 자기 높이를 가진 패널 안에 있어
+   * 페이지 스크롤과 다투지 않는다. 모바일은 기본 잠금이고 사용자가 버튼으로 켠다.
+   */
+  const isDesktop = useIsDesktop();
+  const [unlocked, setUnlocked] = useState(false);
+  const interactive = isDesktop || unlocked;
+  // 데스크톱으로 넓어졌다가 다시 좁아지면 잠금 기본값으로 돌아온다(켠 채로 남지 않게).
+  // effect 대신 렌더 중 조정 — React 권장 패턴이고 추가 리렌더 1회로 끝난다(ResultsPanel 과 동일).
+  const [wasDesktop, setWasDesktop] = useState(isDesktop);
+  if (wasDesktop !== isDesktop) {
+    setWasDesktop(isDesktop);
+    if (unlocked) setUnlocked(false);
+  }
   // 화면 1도당 픽셀(클러스터 판정 배율). 줌이 바뀔 때만 갱신된다 — 겹침은 줌에만 의존한다.
   const [scale, setScale] = useState<ClusterScale | null>(null);
   /**
@@ -224,6 +246,20 @@ export default function KakaoMap({
       container.innerHTML = '';
     };
   }, []);
+
+  // ── 조작 잠금/해제 반영 ──────────────────────────────────
+  /**
+   * 잠금은 SDK 쪽(`setDraggable`/`setZoomable`)과 CSS(`touch-action`) 양쪽에서 건다.
+   * SDK 는 pan 을 멈춰도 지도 내부 div 의 인라인 `touch-action: none` 을 그대로 두기 때문에,
+   * 그것만으로는 브라우저가 세로 스와이프를 페이지 스크롤로 쓰지 못한다 → 잠긴 동안
+   * `.map-locked`(index.css)로 후손까지 `pan-y` 를 강제해 세로 스크롤을 브라우저에 맡긴다.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    map.setDraggable(interactive);
+    map.setZoomable(interactive);
+  }, [ready, interactive]);
 
   // ── 컨테이너 크기 변화 → 재배치 ──────────────────────────
   /**
@@ -533,13 +569,31 @@ export default function KakaoMap({
 
   return (
     <div className="absolute inset-0 overflow-hidden">
-      <div ref={containerRef} className="h-full w-full" />
+      <div
+        ref={containerRef}
+        className={cn('h-full w-full', !interactive && 'map-locked')}
+      />
 
       {/* 마커보다 위 레이어라 이 자리에 마커가 오면 클릭을 가로챈다 → 겹침 해소에 금지 구역으로 넘긴다(F8 ㉠). */}
       <div
         ref={controlsRef}
-        className="absolute bottom-3 right-3 z-[3] flex flex-col gap-1.5"
+        className="absolute bottom-3 right-3 z-[3] flex flex-col items-end gap-1.5"
       >
+        {/*
+          R6 · 모바일에서만 나오는 조작 잠금 토글. 지도를 덮는 오버레이 대신 버튼으로 둔 것은
+          잠긴 상태에서도 마커 탭·토글이 그대로 닿아야 하기 때문이다(F6·F7·F8 무회귀).
+        */}
+        {!isDesktop && (
+          <button
+            type="button"
+            aria-pressed={interactive}
+            onClick={() => setUnlocked((v) => !v)}
+            className="btn btn-sm gap-1 bg-base-100 shadow"
+          >
+            {interactive ? <Lock size={14} /> : <Hand size={14} />}
+            {interactive ? '지도 잠금' : '지도 조작'}
+          </button>
+        )}
         <button
           type="button"
           aria-label="확대"

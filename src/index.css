@@ -33,6 +33,18 @@
     flex: none;
 }
 
+/*
+ * R6 · 잠긴 지도(모바일 기본)는 세로 스와이프를 브라우저에 넘겨 페이지가 스크롤되게 한다.
+ * 카카오 SDK 가 지도 내부 div 에 `touch-action: none` 을 **인라인으로** 박아 두어
+ * 컨테이너에만 `touch-pan-y` 를 줘도 덮이지 않는다(터치는 가장 안쪽 값과 조상 값의 교집합으로
+ * 판정된다) → 잠긴 동안만 후손까지 강제로 되돌린다. 잠금을 풀면 이 클래스가 빠지고
+ * SDK 의 `none` 이 그대로 살아나 pan·핀치 줌이 원래대로 동작한다.
+ */
+.map-locked,
+.map-locked * {
+    touch-action: pan-y !important;
+}
+
 
 @theme {
     --font-sans: 'Pretendard', sans-serif;

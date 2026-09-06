@@ -36,6 +36,16 @@ export interface KakaoMap {
   /** 현재 보이는 영역. 화면 1도당 픽셀(마커 클러스터링 배율) 계산에 쓴다. */
   getBounds: () => KakaoLatLngBounds;
   relayout: () => void;
+  /**
+   * 드래그(pan) 허용 여부. 모바일에서 지도가 페이지 세로 스크롤을 통째로 삼키는 것을
+   * 막으려고 기본을 `false` 로 두고 사용자가 명시로 켠다(R6).
+   */
+  setDraggable: (draggable: boolean) => void;
+  /**
+   * 휠·핀치 줌 허용 여부. 확대/축소 **버튼**은 `setLevel` 을 직접 부르므로 이 값과 무관하게
+   * 동작한다 — 잠긴 상태에서도 배율은 바꿀 수 있다.
+   */
+  setZoomable: (zoomable: boolean) => void;
 }
 
 /**
