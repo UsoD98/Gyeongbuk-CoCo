@@ -199,6 +199,29 @@
     - 콘솔 에러·경고 0.
   - ⏳ **범위 밖으로 남긴 것**: 달력 본문이 라이트/다크 모두 **흰 배경·검은 글씨**다(벤더 기본값 — `index.css` 의 기존 override 는 헤더 색만 바꾼다). 데스크톱에서도 예전부터 같았고 가독성 문제는 없어 R10 사양(테두리·최소높이·화면 안 수납)에서 벗어난다고 보고 두었다. 월 이름이 영어(`September 2026`)인 것도 같은 이유로 유지 — 로케일 설정은 별건이다.
 
+- [x] `☑` **R11 · 폰트 700 · hover 고착 · 메타 태그** 🟡 개선 — **DoD 충족**(2026-09-06). 의존: 없음.
+  - **① 폰트 — 사양(“700 woff2 한 벌 추가”)보다 나은 선택지가 있어 사용자 승인 후 교체했다.**
+    - 증상: `index.css` 가 Pretendard **Regular(400) 한 벌**(765KB 통짜)만 실었는데 UI 는 `font-semibold`(600, 17곳)·`font-bold`(700, 34곳)·`font-extrabold`(800, 19곳)·`font-black`(900, 3곳)을 쓴다 → 전부 브라우저 **합성 볼드**.
+    - 비용 실측 후 판단(사양이 “실제 사용처 대비 비용을 보고 판단”이라 위임한 부분): 같은 CDN 의 Bold 통짜는 **791KB** 라 700 만 더해도 첫 방문 폰트 전송량이 **1,556KB** 가 되고 800·900 은 여전히 700 대체다. → 공식 **`pretendard@1.3.9` dynamic-subset**(unicode-range 로 쪼갠 828개 `@font-face`)으로 교체. 실제로 쓰는 글자 구간만 내려온다.
+    - 선언 위치를 `src/index.css` → **`index.html <head>` `<link>`** 로 옮겼다. `index.css` 안에서 `@import` 하면 앱 CSS 를 받은 뒤에야 폰트 CSS 를 발견해 요청이 **직렬화**된다. 패밀리 이름(`Pretendard`)이 같아 `@theme --font-sans` 는 그대로 살아 있고, 옮긴 자리에는 경위를 적은 주석을 남겼다.
+    - 폴백 스택도 손봤다: `'Pretendard', sans-serif` → `-apple-system`·`system-ui`·`Segoe UI`·`Apple SD Gothic Neo`·`Malgun Gothic`·`Noto Sans KR` 를 사이에 넣었다. `font-display: swap` 이라 도착 전 한 번은 폴백으로 그려지는데, `sans-serif` 만 두면 그 사이 한글이 플랫폼 기본 고딕으로 크게 튄다.
+  - **② hover 고착 — 사양의 전제가 이미 해소돼 있어 `active:` 만 더했다.**
+    - 빌드 CSS 실측: **Tailwind v4 는 `hover:` 유틸리티를 `@media (hover:hover)` 안에 방출한다**(`@media (hover:hover){.hover\:-translate-y-0\.5:hover{…}}`). 터치 기기(`hover: none`)에서는 애초에 적용되지 않으므로 **고착이 발생하지 않는다** → 사양이 지시한 “`@media (hover: hover)` 로 감싼다”는 중복이라 하지 않았다.
+    - 실제로 없던 것은 눌림 피드백이다 → `POICard`(horizontal·stacked 두 variant)와 컬렉션 카드에 `active:scale-[0.98]`. 빌드 CSS 에서 `.active\:scale-\[0\.98\]:active{scale:.98}` 이 **어떤 미디어쿼리에도 감싸이지 않고** 방출되는 것(=터치에서 동작), `transition-property` 에 `scale` 이 포함된 것, `cn()`/tailwind-merge 가 이 클래스를 떨어뜨리지 않는 것(node 로 실제 인자 조합 확인)까지 확인했다.
+  - **③ 메타 태그 — `theme-color` 는 분기가 필요 없었다.**
+    - 사양은 `prefers-color-scheme` 라이트/다크 분기를 지시했지만, 헤더(`HeaderLayout` 의 `.navbar bg-primary`)를 두 테마에서 실측하니 **둘 다 `rgb(0,128,128)`** 이다 — `index.css` 의 `:root { --color-primary: #008080 }` 이 daisyUI 의 테마별 primary 를 덮기 때문. 분기는 같은 값을 두 번 적는 셈이라 **한 값(`#008080`)으로** 뒀다.
+    - `description` + OG 6종(`og:type`·`og:site_name`·`og:title`·`og:description`·`og:image`·`og:locale`) + `twitter:card`.
+  - **덤으로 고친 선재 결함**: 사양이 “카카오 공유의 feed 템플릿 경로를 우선 확인하라”고 해서 봤더니 `utils/kakaoShare.ts` 의 썸네일 **기본값이 `favicon.svg`** 였다 — 카카오 피드 카드는 래스터 이미지만 실어 **썸네일이 비어 보인다**. 같은 `public/` 의 `gbcoco-icon.jpg`(500×500, 24KB — 권장 최소 200×200 충족)로 바꿨다. 공유(S7·GBC014)가 핵심 기능이라 영향이 크다.
+  - **검증**: `npm run lint`·`npm run build`(tsc 포함) 통과.
+    - **합성 볼드가 사라진 것을 폭으로 증명**: `font-synthesis-weight: none` 사본과 폭을 비교했다(32px, 같은 문자열). 400 = **561.73px**, 700 `auto`/`none` = **576.08 / 576.08**, 800 `auto`/`none` = **573.90 / 573.90**. 합성이었다면 `none` 쪽이 400 의 폭(561.73)으로 떨어진다 → **진짜 700·800 페이스가 쓰이고 있다.** (`document.fonts.check('700 16px Pretendard')` 는 합성 여부를 못 가른다 — 교체 **전에도** `true` 였다. DoD 가 제안한 검사법이라 여기 남긴다.)
+    - **로드된 실 웨이트**: `400·500·600·700·800`(`document.fonts` 중 `status === 'loaded'`). 900 은 사용처가 3곳뿐이라 이번 페이지에서는 내려오지 않았다(필요한 화면에서 자동으로 받는다).
+    - **전송량**: 캐시 비운 첫 로드에서 subset woff2 **26개 · 317.6KB** + 폰트 CSS **20.9KB** = **약 339KB**. 교체 전 통짜 400 한 벌이 **765.9KB** 였으므로, **웨이트 1종 → 5종으로 늘리면서 전송량은 56% 줄었다.**
+    - **메타**: dev 로 서빙된 HTML·프로덕션 빌드(`dist/index.html`) 양쪽에서 `theme-color #008080` · `description` · `og:*` 6종 · `twitter:card` 확인.
+    - 390×731 하니스에서 `h1`(`font-extrabold`)이 `font-weight 800` · `font-family Pretendard` 로 렌더되고 획이 깨끗한 것을 확대 스크린샷으로 육안 확인. 가로 넘침 0.
+  - ⏳ **미검증으로 남긴 것 2건**
+    - **`active:` 의 실제 눌림 모습**: CDP 합성 입력은 `mousedown`/`pointerdown` 이벤트는 발생시키지만 **브라우저의 `:active` UA 상태를 켜지 않는다**(실측: 전체화면 프로브에 실클릭 → 이벤트 5종 모두 발생, `matches(':active')` 는 끝까지 `false`, `scale` 은 `none` 고정). 게다가 이날 로컬 백엔드가 `GET /api/v1/poi` 에 **60초 무응답**이라 POI 카드·컬렉션 카드를 실데이터로 띄울 수도 없었다 → **CSS 규칙 레벨까지만** 확인했다. 보드의 기존 한계(“OS 수준의 실제 손가락 터치는 이 툴체인으로 발생시킬 수 없다”)와 같은 성격이다.
+    - **`og:image` 절대 URL**: 배포 오리진이 문서화돼 있지 않아 루트 상대 경로(`/gbcoco-icon.jpg`)로 뒀다. 카카오·페이스북 스크레이퍼는 절대 URL 을 요구하므로 **배포 오리진이 정해지면 절대 URL 또는 `VITE_SITE_URL` + Vite 의 `%VITE_SITE_URL%` 치환으로 바꿔야 한다**(`index.html` 주석에도 남겼다). 코스별 OG 는 사양대로 SPA 한계라 정적 태그로 불가 — 카카오 공유는 feed 템플릿이 직접 싣는다.
+
 ---
 
 ## 2. 진행 로그 (2026-07-17 ~ 2026-08-22)
@@ -273,6 +296,8 @@
 > 서술 시점·요약 각도가 달라 원문을 보존한다. 보드에는 **최신 1건만** 남긴다.
 
 
+
+> 이전 업데이트: 2026-09-06 (**📱 R10 완료 `☑`** — 홈 검색바가 모바일에서 '입력 컨트롤'로 보이게 하고 달력을 전체화면 포털로 바꿨다. 5개 칸의 트리거는 `border-base-100 bg-base-100` 이라 **테두리색이 배경과 같아 사실상 테두리가 없었고**, 칸을 갈라 주던 `w-px` 구분선은 `hidden lg:block` 이라 **모바일에서만** 사라져 텍스트 목록처럼 보였다 → `FIELD_SHELL` 상수로 좁은 폭에서만 `min-h-12`(48px)·`rounded-xl border-base-300`·`px-3 py-2` 를 주고 `lg:` 로 전부 되돌려 알약형 검색바는 손대지 않았다. 트리거 글자는 `text-xs sm:text-sm`→`text-sm`(데스크톱 렌더 동일, 모바일만 12→14px). **껍데기가 56px 로 보이는데 실제 탭 대상은 22px 뿐이라 새 시각 단서가 거짓말이 될 뻔했다** → 트리거 4종에 R8 의 `relative tap-44` 를 얹어 실히트 43px(=44px 상자)로 맞췄다(인원 −/+ 44×44 무회귀). DatePicker 는 `withPortal={!isDesktop}` + `useBodyScrollLock`(R5 규칙), 포털 CSS 는 `z-index 2147483647→60`(R7 사다리)·`100vh→100dvh`+safe-area·날짜 칸 27.2→**40px(피치 44)**·화살표 32→44px. **캐스케이드 함정 하나** — 벤더 CSS 가 lazy 청크로 `index.css` 보다 늦게 실려 같은 특정도로는 z-index 가 안 먹었다 → 클래스를 두 번 적어(0,2,0) 해소. 검증: lint·build 통과 · 390×731 하니스에서 칸 높이 56/58/64/56/56 · 달력 318×319 `fitsX/fitsY` · 10→14일 선택 E2E · 백드롭/Escape 양쪽 닫힘 + 스크롤 잠금 복귀 · **320×640 에서도 달력 318px @ x=1 로 수납** · **1280px 데스크톱 무회귀 실측**(테두리 0·구분선 4개·팝오버 경로·셀 27.2px) · 다크 테마 · 콘솔 에러 0. ⏳ 범위 밖: 달력 본문 흰 배경·영문 월 이름은 벤더 기본값 그대로 뒀다.)
 > 이전 업데이트: 2026-09-06 (**🏝️ 섬 M 전량 완료 `☑` — M1·M2·M3·M4**. 백엔드가 accessToken 클레임에 `userId` 를 싣기로 확정돼 **섬 M 의 블로커가 해소**됐다(추적표 #4). `utils/jwt.ts`(base64url 페이로드 디코드) 를 신설하고 `authStore.setAuth` 가 인자 없이도 토큰에서 `userId` 를 꺼내게 해 **로그인·재발급·카카오 세 경로가 한 번에** 채워진다. `api/user.ts` 에 GBC006~009 4종 + 도메인 훅 4종(`useUser`·`useNicknameUpdate`·`usePasswordUpdate`·`useAccountDelete`), `pages/User/MyPage` + `routes/userRouter`(`/mypage`, `RequireAuth` 안), 헤더 계정 메뉴에 '마이페이지' 진입. **덤으로 고친 선재 결함**: 인증 화면(`/auth/*`)이 `Layout` 밖이라 `Toaster` 가 없어 **세션 만료 안내·회원가입 완료 toast 가 원래 보이지 않았다** → `AuthScreen` 에 `Toaster` 마운트. 검증: lint·build 통과 · `jwt.ts` 8케이스 · 388/318px 가로 넘침 0 · 터치 타깃 44px. ⏳ 실 백엔드 왕복은 미검증(클레임 미배포 + Java 부재).)
 
 > 이전 업데이트: 2026-09-06 (**📱 R9 완료 `☑`** — 토스트를 폭에 따라 갈랐다. `Toaster.tsx` 가 `toast-top toast-end` **고정**이라 모바일에서 헤더의 계정 메뉴·테마 토글 위를 덮고 엄지에서 가장 먼 모서리에 떴다 → `toast-center toast-bottom` + `sm:toast-end sm:toast-top` 으로 **모바일 하단 중앙 / 640px 이상 종전 우상단**. 하단에 있는 동안만 `pb-[env(safe-area-inset-bottom)]` 로 홈 인디케이터를 피하고(R5 규칙), 렌더를 `slice(-3)` 으로 묶어 스택 높이를 153px 로 상한했다(스토어 미변경 — 넘친 것도 기존 3초 타이머로 제거). daisyUI 5.5.18 이 `sm:toast-*` 를 **미리 생성해 배포**해 Tailwind 스캔과 무관하고, 빌드 CSS 에서 base → `@media (width>=40rem)` 순서로 방출되는 것까지 확인했다. 검증: lint·build 통과 · 390×731 iframe 하니스 — **폭 6종 스윕**(320·390·639 하단 중앙 `bottom:16px`·헤더 겹침 0 / 640·800·1280 우상단 `top:16px`·우측 16px = 종전 동일) · 헤더 버튼 전수 중심 소유 · success/error/info 3종 · **5개 밀어도 렌더 3개** · POI 드로어를 연 채 3개 스택에도 액션 바 두 버튼 중심 소유 유지 · 콘솔 에러 0. ⏳ **범위 밖**: 데스크톱(1280px)에서는 토스트가 여전히 테마 토글 중심을 덮는다 — R9 이전과 같은 상태이고 사양이 "640px 이상은 종전대로"를 못 박아 손대지 않았다.)
