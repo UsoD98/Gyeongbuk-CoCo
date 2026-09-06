@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import Toaster from '@/components/common/Toaster.tsx';
 import { cn } from '@/utils/cn.ts';
 
 type AuthScreenProps = {
@@ -51,6 +52,13 @@ export default function AuthScreen({ children }: AuthScreenProps) {
           {children}
         </div>
       </div>
+
+      {/*
+        인증 화면은 Layout 밖에 있어 Layout 의 Toaster 가 닿지 않는다 —
+        세션 만료 안내(client.ts flash)·탈퇴 완료처럼 이 화면에서 띄우는 toast 가
+        보이도록 여기에도 마운트한다.
+      */}
+      <Toaster />
     </div>
   );
 }
