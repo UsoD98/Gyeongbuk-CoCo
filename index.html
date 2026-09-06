@@ -8,6 +8,53 @@
     <!-- viewport-fit=cover: 노치·홈 인디케이터 영역까지 그린다. 그 대가로 안전영역은
          각자 env(safe-area-inset-*) 로 피해야 한다 — Layout(좌우)·PoiDrawer 액션 바(하단). -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- R11 · 모바일 브라우저 크롬 색을 헤더와 맞춘다. `HeaderLayout` 의 `.navbar` 는 `bg-primary`,
+         그 값은 `index.css` 의 `:root { --color-primary: #008080 }` 이라 **라이트·다크가 동일**하다
+         (실측: 두 테마 모두 rgb(0,128,128)) → prefers-color-scheme 분기 없이 한 값으로 둔다. -->
+    <meta name="theme-color" content="#008080" />
+
+    <meta
+      name="description"
+      content="경상북도 여행 일정과 예산을 AI로 계획하고, 나만의 코스로 저장·공유하는 여행 플래너."
+    />
+
+    <!--
+      R11 · 기본 공유 카드(Open Graph).
+      **한계**: SPA 라 `/share/:courseId` 마다 다른 OG 를 정적 태그로 낼 수 없다 → 여기 값은
+      **서비스 기본값**이고, 코스별 카드는 카카오 공유(`utils/kakaoShare.ts`)의 feed 템플릿이
+      코스 제목·설명·썸네일을 직접 실어 처리한다.
+      **배포 시 확인**: `og:image` 는 루트 상대 경로다. 카카오/페이스북 스크레이퍼는 절대 URL 을
+      요구하므로, 배포 오리진이 정해지면 절대 URL(또는 `VITE_SITE_URL` + Vite 의 `%VITE_SITE_URL%`
+      치환)로 바꿔야 한다.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="경북 CoCo" />
+    <meta property="og:title" content="경북 CoCo — 완벽한 경북 여행의 시작" />
+    <meta
+      property="og:description"
+      content="경상북도 여행 일정과 예산을 AI로 계획하고, 나만의 코스로 저장·공유하는 여행 플래너."
+    />
+    <meta property="og:image" content="/gbcoco-icon.jpg" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta name="twitter:card" content="summary" />
+
+    <!--
+      R11 · Pretendard.
+      `index.css` 는 Regular(400) **한 벌만** 실었고 UI 는 `font-semibold`(600)·`font-bold`(700)·
+      `font-extrabold`(800)를 쓴다 → 브라우저 합성 볼드로 저해상도 화면에서 뭉갰다.
+      공식 dynamic-subset 은 unicode-range 로 글자 구간을 쪼개 **실제로 쓰는 구간만** 받는다:
+      400 한 벌 통짜(765KB)보다도 적은 양으로 100~900 전 웨이트가 진짜 폰트가 된다.
+      `<head>` 에 두는 이유 — `index.css` 안에서 `@import` 하면 앱 CSS 를 받은 뒤에야 발견돼
+      직렬화된다. 폰트 패밀리 이름(`Pretendard`)은 그대로라 `index.css` 의 `--font-sans` 는 불변.
+    -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard-dynamic-subset.css"
+    />
+
     <title>경북 CoCo</title>
   </head>
   <body>

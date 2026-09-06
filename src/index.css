@@ -4,12 +4,16 @@
     themes: light, dark, cupcake, bumblebee, emerald, corporate;
 }
 
-@font-face {
-    font-family: 'Pretendard';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2') format('woff2');
-    font-weight: 400;
-    font-display: swap;
-}
+/*
+ * R11 · Pretendard 는 더 이상 여기서 선언하지 않는다.
+ *
+ * 예전에는 이 자리에 Regular(400) `@font-face` **한 벌**만 있었고, UI 는 `font-semibold`(600)·
+ * `font-bold`(700)·`font-extrabold`(800)를 쓰고 있었다 → 700/800 이 전부 **브라우저 합성 볼드**라
+ * 저해상도 모바일에서 뭉갰다. 웨이트를 통짜로 더 받으면(Bold 한 벌 791KB) 모바일 전송량이
+ * 1.5MB 로 뛴다 → 공식 **dynamic-subset**(unicode-range 분할)으로 갈아 `index.html <head>` 에서
+ * `<link>` 로 받는다. 실제로 쓰는 글자 구간만 내려와 전 웨이트가 진짜 폰트가 된다.
+ * 선언 위치를 `<head>` 로 옮긴 이유와 배경은 `index.html` 의 주석 참조.
+ */
 
 :root {
     --color-primary: #008080;
@@ -80,7 +84,12 @@
 
 
 @theme {
-    --font-sans: 'Pretendard', sans-serif;
+    /*
+     * 폴백은 한글이 있는 시스템 폰트까지 적어 둔다 — `font-display: swap` 이라 Pretendard 가
+     * 도착하기 전 한 번은 폴백으로 그려지는데, 맨 뒤의 `sans-serif` 만 두면 그 사이 한글이
+     * 플랫폼 기본 고딕으로 크게 튄다.
+     */
+    --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
     --font-serif: 'Pretendard', serif;
 
     /* primary */
@@ -132,6 +141,71 @@
     .react-datepicker__current-month {
         color: var(--color-primary-50) !important;
     }
+}
+
+/*
+ * R10 · 모바일 달력(전체화면 포털).
+ *
+ * `Index.tsx` 가 좁은 폭에서만 `withPortal` 을 켠다 → 아래 규칙은 **포털이 있을 때만** 적용되므로
+ * 데스크톱 팝오버는 손대지 않는다(`.react-datepicker__portal` 스코프가 그 보증이다).
+ *
+ * ① z-index: 벤더 CSS 가 `2147483647` 을 박아 두어 R7 의 z 사다리(본문 0~10 · 헤더 30 ·
+ *    드로어 40/50 · 토스트 50 · 모달 60/70) 밖으로 튄다 → 모달급인 60 으로 내린다.
+ * ② 높이: `100vh` 는 모바일 브라우저 크롬이 접힐 때 실제 보이는 높이보다 커진다 → `100dvh`.
+ *    `viewport-fit=cover` 라 안전영역도 스스로 피한다(R5 규칙).
+ * ③ 셀 크기: 기본값은 `font-size: 0.8rem` × `2.125em` = 약 27px 이라 손가락으로 못 누른다 →
+ *    날짜 칸을 40px + 좌우 2px 여백 = **피치 44px**(R8 의 Apple HIG 44pt)로 키운다.
+ *    한 줄 폭 7×44 + `__month` 여백 8 + 테두리 2 = 318px 로 **320px 화면에도 들어간다**.
+ * ④ 이전/다음 달 화살표도 44px. 월 제목 줄의 line-height 를 44px 로 맞춰 화살표가 그 줄 안에
+ *    떨어지게 한다(그러지 않으면 44px 상자가 아래 요일 줄을 덮는다).
+ */
+/*
+ * 클래스를 두 번 적어 특정도를 올린다(0,2,0 > 0,1,0). 벤더 CSS(`react-datepicker.css`)는
+ * `Index.tsx` 안에서 import 되어 **lazy 청크와 함께 이 파일보다 늦게** 주입된다 →
+ * 같은 특정도로는 소스 순서에서 벤더가 이긴다(실측: z-index 가 2147483647 로 남았다).
+ */
+.react-datepicker__portal.react-datepicker__portal {
+    z-index: 60;
+    height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.react-datepicker__portal .react-datepicker {
+    font-size: 1rem;
+}
+
+.react-datepicker__portal .react-datepicker__month {
+    margin: 0.25rem;
+}
+
+.react-datepicker__portal .react-datepicker__day-name,
+.react-datepicker__portal .react-datepicker__day {
+    width: 2.5rem;
+    line-height: 2.5rem;
+    margin: 0.125rem;
+}
+
+.react-datepicker__portal .react-datepicker__header {
+    padding-top: 0;
+}
+
+.react-datepicker__portal .react-datepicker__current-month {
+    font-size: 1rem;
+    line-height: 2.75rem;
+}
+
+.react-datepicker__portal .react-datepicker__navigation {
+    top: 0;
+    height: 2.75rem;
+    width: 2.75rem;
+}
+
+.react-datepicker__portal .react-datepicker__navigation--previous {
+    left: 0;
+}
+
+.react-datepicker__portal .react-datepicker__navigation--next {
+    right: 0;
 }
 
 /* 플래너 오버레이 등장 모션. motion-safe:animate-[coco-*] 로 소비한다. */
