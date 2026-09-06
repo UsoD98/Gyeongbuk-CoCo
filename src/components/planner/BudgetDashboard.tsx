@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Bookmark,
   Car,
+  HandCoins,
   Home,
   Pencil,
   Share2,
@@ -11,12 +12,14 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import SettleModal from '@/components/planner/SettleModal.tsx';
 import { usePoiResolver } from '@/hooks/usePoiResolver.ts';
 import { nightsFromRange } from '@/mocks/planner.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { BCATS, computeBudget, transportRateNote } from '@/utils/budget.ts';
 import { TRANSPORT_LABEL, TRANSPORT_ORDER } from '@/utils/courseFormat.ts';
 import { won } from '@/utils/format.ts';
+import { kakaoPayEnabled } from '@/utils/kakaoPay.ts';
 import { cn } from '@/utils/cn.ts';
 import type { Transport } from '@/api/tourCourse.ts';
 import type { BudgetCatKey } from '@/types/planner.ts';
@@ -69,6 +72,8 @@ export default function BudgetDashboard({
 
   // 교통비 직접 입력 중인지 (표시 전용 상태라 스토어에 두지 않는다).
   const [editingTransport, setEditingTransport] = useState(false);
+  // 1/N 정산 모달 열림 여부.
+  const [settleOpen, setSettleOpen] = useState(false);
 
   const nights = nightsFromRange(search.start, search.end);
   const { byCat, total, perPerson, n } = computeBudget({
@@ -115,9 +120,13 @@ export default function BudgetDashboard({
             </span>
           </div>
         </div>
-        {(onSave || onShare) && !compact && (
+        {/*
+          정산은 compact(모바일 예산 탭)에서도 노출한다 — 저장·공유는 상단 요약 바에
+          이미 있지만 정산은 여기가 유일한 진입점이고, 1/N 이 가장 필요한 화면이다.
+        */}
+        {((!compact && (onSave || onShare)) || kakaoPayEnabled) && (
           <div className="flex items-center gap-2">
-            {onSave && (
+            {!compact && onSave && (
               <button
                 type="button"
                 className="btn btn-sm btn-outline gap-1"
@@ -132,13 +141,24 @@ export default function BudgetDashboard({
                 {saveLabel ?? (saved ? '저장됨' : '저장')}
               </button>
             )}
-            {onShare && (
+            {!compact && onShare && (
               <button
                 type="button"
                 className="btn btn-sm btn-primary gap-1"
                 onClick={onShare}
               >
                 <Share2 size={16} />공유
+              </button>
+            )}
+            {kakaoPayEnabled && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline gap-1"
+                onClick={() => setSettleOpen(true)}
+                disabled={total <= 0}
+                title={total <= 0 ? '예산이 0원이라 정산할 게 없어요' : undefined}
+              >
+                <HandCoins size={16} />정산
               </button>
             )}
           </div>
@@ -272,6 +292,14 @@ export default function BudgetDashboard({
           : `교통비는 ${transportRateNote(transport)}. 금액을 눌러 직접 고칠 수 있어요.`}{' '}
         이동수단·교통비 변경은 아직 코스에 저장되지 않아요(장소별 금액은 저장돼요).
       </div>
+
+      <SettleModal
+        open={settleOpen}
+        onClose={() => setSettleOpen(false)}
+        total={total}
+        perPerson={perPerson}
+        n={n}
+      />
     </div>
   );
 }
