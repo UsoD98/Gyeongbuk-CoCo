@@ -53,10 +53,13 @@ interface FlatItem {
 
 /**
  * 진행 중인 동일 요청 공유(in-flight dedup).
- * Planner 는 데스크톱·모바일 ResultsPanel 을 **동시에 마운트**하고 dev StrictMode 는 effect 를
- * 두 번 돌린다 → 같은 (지역, 인원) 조회가 동시에 2~4회 나간다. `GET /poi` 는 TourAPI 라이브
- * 조회라 동시 호출이 겹치면 503 이 나기도 해서(실측), 아직 끝나지 않은 동일 요청은 공유한다.
- * 완료 즉시 항목을 지우므로 캐시가 아니다(재조회는 항상 새 요청).
+ * `GET /poi` 는 TourAPI 라이브 조회라 동시 호출이 겹치면 503 이 나기도 해서(실측), 아직
+ * 끝나지 않은 동일 요청은 공유한다. 완료 즉시 항목을 지우므로 캐시가 아니다(재조회는 항상 새 요청).
+ *
+ * ▷ 남겨 두는 근거: R2 이전에는 Planner 가 데스크톱·모바일 ResultsPanel 을 **동시에 마운트**해
+ *   같은 조회가 2~4회 나갔고 이 dedup 이 그 증상을 막고 있었다. R2 에서 한쪽 트리만 마운트하도록
+ *   고쳐 그 원인은 사라졌지만, **dev StrictMode 의 이중 effect** 와 시군구 복수 선택 시의
+ *   동시 호출은 그대로라 dedup 자체는 여전히 유효하다.
  */
 const inflight = new Map<string, Promise<PoiListResponse>>();
 

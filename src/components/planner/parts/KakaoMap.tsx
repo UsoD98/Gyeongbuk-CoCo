@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Minus, Navigation, Plus } from 'lucide-react';
 
 import {
@@ -217,6 +224,47 @@ export default function KakaoMap({
       container.innerHTML = '';
     };
   }, []);
+
+  // ── 컨테이너 크기 변화 → 재배치 ──────────────────────────
+  /**
+   * 모바일 탭 전환(R3)은 결과 패널을 언마운트하지 않고 `display:none` 으로만 감춘다 →
+   * 감춰진 동안 지도 컨테이너가 0×0 이 되고, 다시 보일 때 SDK 는 예전 크기를 그대로
+   * 믿어 타일이 잘리거나 회색으로 남을 수 있다. **0 이었다가 돌아오는** 전환과 순수한
+   * 크기 변화를 모두 잡아 `relayout()` 한다(중심·배율은 보존된다).
+   *
+   * 0×0 프레임에서는 아무것도 하지 않는다 — 그 크기로 relayout 하면 시야를 잃는다.
+   */
+  const lastSizeRef = useRef({ w: 0, h: 0, hidden: true });
+  const syncSize = useCallback(() => {
+    const el = containerRef.current;
+    const map = mapRef.current;
+    if (!el || !map) return;
+    const w = el.clientWidth;
+    const h = el.clientHeight;
+    const last = lastSizeRef.current;
+    if (!w || !h) {
+      last.hidden = true;
+      return;
+    }
+    if (!last.hidden && w === last.w && h === last.h) return;
+    lastSizeRef.current = { w, h, hidden: false };
+    map.relayout();
+  }, []);
+
+  // 탭 복귀처럼 **리렌더를 동반하는** 전환은 여기서 잡는다 — 아래 ResizeObserver 는
+  // 렌더링 스텝(rAF)에 실려 오므로 배경 탭 등 프레임이 멈춘 상황에서는 오지 않는다.
+  useLayoutEffect(() => {
+    if (ready) syncSize();
+  });
+
+  // 리렌더 없이 일어나는 크기 변화(창 리사이즈·기기 회전·주소창 접힘)는 관찰자로 잡는다.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!ready || !el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ready, syncSize]);
 
   /**
    * 클러스터 배율 + 컨트롤 금지 구역 읽기 — 한 번의 `getBounds()` 로 **함께** 읽는다
