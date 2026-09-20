@@ -23,15 +23,52 @@ import { getApiErrorMessage } from '@/api/types.ts';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock.ts';
 import { usePoi } from '@/hooks/usePoi.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
+import type { Poi } from '@/types/planner.ts';
 import { kakaoMapPlaceUrl } from '@/utils/kakaoMap.ts';
 import { won } from '@/utils/format.ts';
 import { cn } from '@/utils/cn.ts';
 
 /**
+ * 열 대상과 닫기를 누가 쥐는가.
+ *
+ * - 인자 없음(플래너): `plannerStore.drawer` 를 구독하고 `closeDrawer` 로 닫는다.
+ * - 인자 있음(공개뷰): 페이지가 `poiId`·`onClose` 를 쥔다. 스토어에 없는 장소라 표시용
+ *   기본값(`base`)을 함께 넘기고, 편집이 불가능하므로 `readOnly` 로 담기/빼기를 없앤다.
+ *
+ * 두 필드를 **쌍으로** 묶어 둔 것은 `poiId` 만 넘기고 `onClose` 를 빠뜨리면 닫기가
+ * 스토어로 새어 나가(=아무 일도 일어나지 않아) 시트가 안 닫히기 때문이다.
+ */
+type PoiDrawerProps =
+  | {
+      poiId?: undefined;
+      base?: undefined;
+      readOnly?: undefined;
+      onClose?: undefined;
+    }
+  | {
+      /** 열 장소(null = 닫힘). */
+      poiId: string | null;
+      /** 스토어 밖 출처의 표시용 기본값(공개뷰 코스 장소). memo 된 객체를 넘길 것. */
+      base?: Poi;
+      /** 담기/빼기를 숨긴다(공개뷰는 남의 코스라 편집 대상이 아니다). */
+      readOnly?: boolean;
+      onClose: () => void;
+    };
+
+/**
  * POI 상세. 데스크톱은 우측 420px 패널, 모바일은 바텀시트.
  * 표준 Layout 위에 떠야 하므로 fixed + 높은 z-index.
+ *
+ * 플래너(스토어 구독)와 공개뷰(페이지가 상태를 쥠) 양쪽이 같은 시트를 쓴다 — 위
+ * `PoiDrawerProps` 참조.
  */
-export default function PoiDrawer() {
+export default function PoiDrawer({
+  poiId: poiIdProp,
+  base,
+  readOnly = false,
+  onClose,
+}: PoiDrawerProps = {}) {
+  const controlled = onClose !== undefined;
   const drawer = usePlannerStore((s) => s.drawer);
   const course = usePlannerStore((s) => s.course);
   const activeDay = usePlannerStore((s) => s.activeDay);
@@ -41,19 +78,26 @@ export default function PoiDrawer() {
   // POI 데이터 소스는 usePoi 훅으로 캡슐화(P0). P3(GBC018)에서 실상세 조회로 교체 —
   // 목록/코스로 이미 아는 값은 즉시 그리고 상세(소개·연락처·부가정보)는 도착하는 대로 채운다.
   // 훅은 조건부 호출 불가 → 최상단에서 호출(poiId 없으면 조회하지 않는다).
-  const { poi, detail, loading, error, reload } = usePoi(drawer.poiId);
+  // 열 대상: 공개뷰는 prop, 플래너는 스토어(닫혀 있으면 조회하지 않게 null).
+  const activeId = controlled
+    ? (poiIdProp ?? null)
+    : drawer.open
+      ? drawer.poiId
+      : null;
+  const close = onClose ?? closeDrawer;
+  const { poi, detail, loading, error, reload } = usePoi(activeId, base);
 
   useEffect(() => {
-    if (!drawer.open) return;
+    if (!activeId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeDrawer();
+      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawer.open, closeDrawer]);
+  }, [activeId, close]);
 
   // 아래 early return 과 같은 조건 — 시트가 실제로 떠 있는 동안에만 배경을 잠근다.
-  const visible = drawer.open && !!drawer.poiId && !!poi;
+  const visible = !!activeId && !!poi;
   useBodyScrollLock(visible);
 
   if (!visible || !poi) return null;
@@ -102,7 +146,7 @@ export default function PoiDrawer() {
     <>
       <div
         className="fixed inset-0 z-40 bg-black/40 motion-safe:animate-[coco-fade_0.2s_ease-out]"
-        onClick={closeDrawer}
+        onClick={close}
       />
       <div
         role="dialog"
@@ -138,7 +182,7 @@ export default function PoiDrawer() {
           />
           <button
             type="button"
-            onClick={closeDrawer}
+            onClick={close}
             aria-label="닫기"
             className="btn btn-sm btn-square absolute right-3 top-3 bg-base-100 shadow"
           >
@@ -310,10 +354,11 @@ export default function PoiDrawer() {
             'pb-[max(1rem,env(safe-area-inset-bottom))]',
           )}
         >
+          {/* 읽기 전용(공개뷰)에는 담을 코스가 없다 → 닫기만 남기고 폭을 채운다. */}
           <button
             type="button"
-            className="btn btn-outline"
-            onClick={closeDrawer}
+            className={cn('btn btn-outline', readOnly && 'grow')}
+            onClick={close}
           >
             닫기
           </button>
@@ -321,16 +366,21 @@ export default function PoiDrawer() {
             이미 담긴 장소면 같은 자리에서 바로 뺄 수 있게 한다 — 전에는 '추가됨' 이라
             누를 수는 있으나 스토어가 중복이라며 거절하는, 아무 일도 못 하는 버튼이었다.
           */}
-          <button
-            type="button"
-            className={cn('btn grow gap-1', inDay ? 'btn-error' : 'btn-primary')}
-            onClick={() =>
-              inDay ? removePoi(activeDay, poi.id) : addPoi(poi.id)
-            }
-          >
-            {inDay ? <Minus size={18} /> : <Plus size={18} />}
-            {inDay ? `${day?.label}에서 제거` : `${day?.label}에 추가`}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className={cn(
+                'btn grow gap-1',
+                inDay ? 'btn-error' : 'btn-primary',
+              )}
+              onClick={() =>
+                inDay ? removePoi(activeDay, poi.id) : addPoi(poi.id)
+              }
+            >
+              {inDay ? <Minus size={18} /> : <Plus size={18} />}
+              {inDay ? `${day?.label}에서 제거` : `${day?.label}에 추가`}
+            </button>
+          )}
         </div>
       </div>
     </>
