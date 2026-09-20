@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
-import { readUserIdFromToken } from '@/utils/jwt.ts';
+import { readProviderFromToken, readUserIdFromToken } from '@/utils/jwt.ts';
+import type { LoginProvider } from '@/utils/jwt.ts';
 
 /**
  * 인증 상태.
@@ -54,9 +55,25 @@ export function authSessionKey(): string {
   return isAuthenticated ? `u${userId ?? '?'}` : 'guest';
 }
 
+/**
+ * 로그인 경로에 따라 "비밀번호를 가진 계정인가"를 판단하는 선택자.
+ * 카카오 계정은 우리 쪽에 비밀번호가 없으므로 변경 UI 자체를 숨긴다.
+ * provider를 모르는 구버전 토큰은 기존 동작(자체 로그인)을 유지한다.
+ *
+ * 규칙을 화면마다 복제하지 않도록 인증 상태의 주인인 여기에 둔다.
+ */
+export const selectCanChangePassword = (state: AuthState): boolean =>
+  state.provider !== 'kakao';
+
 interface AuthState {
   accessToken: string | null;
   userId: number | null;
+  /**
+   * 로그인 경로(accessToken `provider` 클레임). 토큰이 없거나 클레임이 없으면 null.
+   * userId와 달리 localStorage에 두지 않는다 — 화면 분기에만 쓰고, 그 화면들은
+   * 토큰이 있어야(= 메모리에 값이 있어야) 그려지기 때문.
+   */
+  provider: LoginProvider | null;
   isAuthenticated: boolean;
   status: AuthStatus;
   /**
@@ -73,6 +90,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   userId: readStoredUserId(),
+  provider: null,
   isAuthenticated: false,
   status: 'idle',
 
@@ -98,6 +116,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       return {
         accessToken: token,
         userId: nextUserId,
+        // 재발급 토큰에 클레임이 빠져도 직전 값을 유지한다(userId와 같은 규칙).
+        provider: token
+          ? (readProviderFromToken(token) ?? state.provider)
+          : null,
         isAuthenticated: Boolean(token),
         status: token ? 'authenticated' : 'guest',
       };
@@ -112,6 +134,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({
       accessToken: null,
       userId: null,
+      provider: null,
       isAuthenticated: false,
       status: 'guest',
     });

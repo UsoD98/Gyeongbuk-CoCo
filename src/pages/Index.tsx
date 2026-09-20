@@ -22,6 +22,7 @@ import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { useTravelThemeStore } from '@/stores/travelThemeStore.ts';
+import type { PlannerNavState } from '@/types/planner.ts';
 import { cn } from '@/utils/cn.ts';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -266,7 +267,17 @@ export default function Index() {
         themes: selectedThemes,
         transport,
       });
-      navigate('/planner/');
+      // 로그인 상태로 생성됐으면(GBC010 `login:true`) 서버가 이미 내 계정에 귀속한 코스다 →
+      // 상세 경로 `/planner/{courseId}` 로 보내 소유 코스 화면(제목 편집·변경 저장)에서 이어
+      // 작업하게 한다. 스토어엔 방금 실은 코스가 그대로 있으므로 `fromCreate` 로 상세 재조회를
+      // 건너뛰라고 알린다(재조회는 홈에서 고른 지역·편집분을 덮어쓴다).
+      // 게스트(`false`/필드 미도착)면 지금까지처럼 인메모리 index 라우트로 간다.
+      if (res.login) {
+        const navState: PlannerNavState = { fromCreate: true };
+        navigate(`/planner/${res.courseId}`, { state: navState });
+      } else {
+        navigate('/planner/');
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, '코스 생성에 실패했어요'));
     } finally {

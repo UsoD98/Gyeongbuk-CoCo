@@ -104,3 +104,15 @@ export interface Budget {
   perPerson: number;
   n: number;
 }
+
+/**
+ * `/planner/:courseId` 로 넘길 때 함께 싣는 라우터 state (`navigate(to, { state })`).
+ * history 엔트리에 저장돼 새로고침·뒤로가기에도 남는다 → 스토어 상태와 **함께** 확인한다.
+ */
+export interface PlannerNavState {
+  /**
+   * 방금 생성(GBC010 `login:true`)한 코스로 바로 넘어온 진입.
+   * 스토어에 이미 그 코스가 실려 있으므로 상세(GBC012) 재조회를 건너뛰라는 신호다.
+   */
+  fromCreate?: boolean;
+}

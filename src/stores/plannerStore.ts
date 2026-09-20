@@ -242,8 +242,11 @@ export const placeholderPlaceName = (contentId: number | string) =>
  *
  * 장소명: 상세/공개뷰는 `placeName`, 생성은 `contentName`(백엔드 추가 예정).
  * 둘 다 없으면 `장소 #id` placeholder 를 쓰고, 카탈로그가 있으면 `mergePoi` 가 실명으로 바꾼다.
+ *
+ * ⚠️ 공개뷰(`pages/Share`)는 코스를 스토어에 싣지 않고 이 함수만 직접 쓴다 — 공유 링크
+ *    수신자의 플래너에 남의 코스가 실리면 안 된다(헤더에 `/planner/` 진입 링크가 늘 있다).
  */
-function synthesizePoi(place: CoursePlace, region: string): Poi {
+export function synthesizePoi(place: CoursePlace, region: string): Poi {
   const cat = PLACE_TYPE_TO_CAT[place.type] ?? 'sight';
   const visitTime = place.time?.slice(0, 5) ?? ''; // 'HH:mm:ss' → 'HH:mm'
   const name =

@@ -119,6 +119,16 @@ export interface CreateCourseResponse {
    * → FE 가 임의로 지어 붙이지 말고 이 값을 쓴다.
    */
   title: string;
+  /**
+   * 생성 요청이 **로그인 상태로 처리됐는지**(= 서버가 이 코스를 요청자 계정에 귀속했는지).
+   * 백엔드 추가 예정 필드 — 도착 전까지는 `undefined` 라 게스트(false)와 같게 다룬다.
+   *
+   * - `false`/미도착: 코스는 주인이 없다 → 지금까지처럼 `/planner/`(인메모리)로 보내고,
+   *   저장 버튼은 소유권 이전(GBC016 assign)을 태운다.
+   * - `true`: 이미 내 코스다 → `/planner/{courseId}` 로 보내 상세 경로와 같은 화면
+   *   (제목 인라인 편집 GBC015 · 변경 저장 GBC020)에서 그대로 이어 작업한다.
+   */
+  login?: boolean;
   schedule: CourseScheduleDay[];
 }
 

@@ -25,6 +25,8 @@ import type { Poi } from '@/types/planner.ts';
  *
  * ⚠️ 훅이므로 조건부로 호출하지 말 것(컴포넌트 최상단에서 호출). `poiId` 가 null 이면 조회하지 않는다.
  * ⚠️ 목 POI(슬러그 id)·실 contentId 가 아닌 값은 서버 조회를 건너뛴다(`poi` 만 돌려준다).
+ * ⚠️ `base` 는 **스토어 밖 출처**를 쓰는 화면(공개뷰)이 넘기는 표시용 기본값이다. 넘기면
+ *    `usePoiResolver` 대신 그 값에 상세를 얹는다 — 렌더마다 새 객체를 만들지 말고 memo 할 것.
  */
 export interface PoiView {
   /** 표시용 POI(기존 소스 + 상세 보강). 아직 아무 소스도 없으면 undefined. */
@@ -83,9 +85,11 @@ function contentIdOf(poiId: string | null): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-export function usePoi(poiId: string | null): PoiView {
+export function usePoi(poiId: string | null, base?: Poi): PoiView {
   const resolvePoi = usePoiResolver();
-  const base = poiId ? resolvePoi(poiId) : undefined;
+  // 스토어 밖 출처(`base`)가 주어지면 그쪽을 바탕으로 삼는다 — 공개뷰(`pages/Share`)는 코스를
+  // 플래너 스토어에 싣지 않으므로 해석기로는 장소를 풀 수 없다.
+  const source = base ?? (poiId ? resolvePoi(poiId) : undefined);
   const contentId = contentIdOf(poiId);
   const hydrateLikes = usePoiLikeStore((s) => s.hydrate);
   // 세션 키 — 값이 바뀌면(로그인/로그아웃) fetcher 참조가 바뀌어 상세를 다시 조회한다.
@@ -106,7 +110,7 @@ export function usePoi(poiId: string | null): PoiView {
   const fresh = contentId != null && data?.contentId === contentId ? data : null;
   const detail = fresh ?? cached;
 
-  const poi = useMemo(() => withDetail(base, detail), [base, detail]);
+  const poi = useMemo(() => withDetail(source, detail), [source, detail]);
 
   // 찜 여부·총 좋아요 수를 스토어로 넘긴다 — 하트와 개수는 카드·드로어가 같은 출처를 봐야 하고,
   // 토글 응답(`{liked,totalLiked}`)이 같은 자리에 확정된다. 이미 아는 값은 덮지 않는다.

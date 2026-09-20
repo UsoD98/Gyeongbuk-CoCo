@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { Bookmark, Calendar, Compass, MapPin, Share2, Users } from 'lucide-react';
 
 import { getApiErrorMessage } from '@/api/types.ts';
@@ -22,6 +22,7 @@ import { useAuthStore } from '@/stores/authStore.ts';
 import { useLoginGateStore } from '@/stores/loginGateStore.ts';
 import { usePlannerStore } from '@/stores/plannerStore.ts';
 import { useSigunguStore } from '@/stores/sigunguStore.ts';
+import type { PlannerNavState } from '@/types/planner.ts';
 import { cn } from '@/utils/cn.ts';
 
 type MobileTab = 'results' | 'course' | 'budget';
@@ -35,15 +36,32 @@ const PANEL_H = 'h-[clamp(500px,calc(100vh_-_15rem),780px)]';
 const PANEL_GRID = 'grid grid-cols-[clamp(320px,26%,400px)_1fr] items-start gap-5';
 
 export default function Planner() {
-  // /planner/:courseId 진입(목록 카드 클릭·URL 재진입) 시 상세를 불러와 스토어에 적재.
-  // index 라우트(게스트 생성 직후)면 param 이 없어 훅은 fetch 없이 idle 로 끝난다.
   const { courseId: courseIdParam } = useParams();
-  const { error: detailError, reload: reloadDetail } =
-    useCourseDetail(courseIdParam);
+  const location = useLocation();
 
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
   const storeCourseId = usePlannerStore((s) => s.courseId);
+
+  // 판정 기준은 로딩 플래그가 아니라 "스토어가 이 코스를 들고 있는가"다 —
+  // 그래야 다른 코스로 URL 이 바뀌는 순간 이전 코스가 새 URL 아래 스치듯 렌더되지 않는다.
+  const paramId = courseIdParam ? Number(courseIdParam) : null;
+  const hasParamCourse = paramId != null && storeCourseId === paramId;
+  // 생성 직후 리다이렉트(GBC010 `login:true` → Index 가 `fromCreate` 를 싣는다)면 상세를
+  // 다시 부르지 않는다. 스토어엔 방금 받은 같은 코스가 있고, `loadDetail` 은 스토어를 통째로
+  // 갈아끼워 **홈에서 고른 지역(`search.dests`)과 그 사이의 편집분**을 날린다.
+  // (state 는 history 에 남지만 새로고침하면 스토어가 비어 `hasParamCourse` 가 꺼지므로,
+  //  그때는 정상적으로 상세를 불러온다.)
+  const fromCreate =
+    (location.state as PlannerNavState | null)?.fromCreate === true;
+  const skipDetail = hasParamCourse && fromCreate;
+
+  // /planner/:courseId 진입(목록 카드 클릭·URL 재진입) 시 상세를 불러와 스토어에 적재.
+  // index 라우트(게스트 생성 직후)면 param 이 없어 훅은 fetch 없이 idle 로 끝난다.
+  const { error: detailError, reload: reloadDetail } = useCourseDetail(
+    skipDetail ? undefined : courseIdParam,
+  );
+
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
 
@@ -81,11 +99,7 @@ export default function Planner() {
     : '경상북도';
 
   // /planner/:courseId 인데 그 코스가 아직 스토어에 없으면 로딩/에러를 먼저 처리한다.
-  // 판정 기준은 로딩 플래그가 아니라 "스토어가 이 코스를 들고 있는가"다 —
-  // 그래야 다른 코스로 URL 이 바뀌는 순간 이전 코스가 새 URL 아래 스치듯 렌더되지 않는다.
-  // (스토어에 이미 있으면 — 게스트 생성 직후 등 — 즉시 렌더하고 상세는 백그라운드로 갱신.)
-  const paramId = courseIdParam ? Number(courseIdParam) : null;
-  const hasParamCourse = paramId != null && storeCourseId === paramId;
+  // (스토어에 이미 있으면 — 로그인 생성 직후 등 — 즉시 렌더하고 상세는 백그라운드로 갱신.)
   if (courseIdParam && !hasParamCourse) {
     if (detailError) {
       return (
