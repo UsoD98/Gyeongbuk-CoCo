@@ -53,6 +53,7 @@ export default function Planner() {
   const search = usePlannerStore((s) => s.search);
   const storeCourseId = usePlannerStore((s) => s.courseId);
   const storeOwned = usePlannerStore((s) => s.owned);
+  const sessionFresh = usePlannerStore((s) => s.sessionFresh);
 
   // 판정 기준은 로딩 플래그가 아니라 "스토어가 이 코스를 들고 있는가"다 —
   // 그래야 다른 코스로 URL 이 바뀌는 순간 이전 코스가 새 URL 아래 스치듯 렌더되지 않는다.
@@ -61,11 +62,14 @@ export default function Planner() {
   // 생성 직후 리다이렉트(GBC010 `login:true` → Index 가 `fromCreate` 를 싣는다)면 상세를
   // 다시 부르지 않는다. 스토어엔 방금 받은 같은 코스가 있고, `loadDetail` 은 스토어를 통째로
   // 갈아끼워 **홈에서 고른 지역(`search.dests`)과 그 사이의 편집분**을 날린다.
-  // (state 는 history 에 남지만 새로고침하면 스토어가 비어 `hasParamCourse` 가 꺼지므로,
-  //  그때는 정상적으로 상세를 불러온다.)
+  //
+  // ⚠️ `sessionFresh` 가 조건에 꼭 필요하다. `location.state` 는 history 에 저장돼
+  //    **새로고침해도 살아남고**, 스토어도 이제 localStorage 에서 복원되므로 둘만으로는
+  //    복원된 코스가 영영 "방금 만든 것"으로 취급돼 서버 상세를 다시 부르지 않는다
+  //    (= 원격 수정·삭제가 반영되지 않는다). 복원분은 `sessionFresh` 가 false 다.
   const fromCreate =
     (location.state as PlannerNavState | null)?.fromCreate === true;
-  const skipDetail = hasParamCourse && fromCreate;
+  const skipDetail = hasParamCourse && fromCreate && sessionFresh;
 
   // /planner/:courseId 진입(목록 카드 클릭·URL 재진입) 시 상세를 불러와 스토어에 적재.
   // index 라우트(게스트 생성 직후)면 param 이 없어 훅은 fetch 없이 idle 로 끝난다.
@@ -161,7 +165,9 @@ export default function Planner() {
   }
 
   // 소유 코스 판정 = 로그인 + courseId 존재 + (스토어가 아는 소유 여부 || 이 세션에서 저장 ||
-  // `/planner/:courseId` 진입). 제목 인라인 편집(GBC015)의 노출 조건과 같은 기준이다.
+  // `/planner/:courseId` 진입). `storeOwned` 가 더해진 건 새로고침 대비다 — 저장분에서
+  // 복원된 소유 코스를 index 라우트에서 열면 예전 기준으로는 미소유로 보여 저장 버튼이
+  // assign(GBC016)을 태우고, 이미 주인이 있는 코스라 403 이 난다.
   const owned =
     isAuthenticated &&
     storeCourseId != null &&

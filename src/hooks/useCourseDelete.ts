@@ -15,7 +15,7 @@ import { toast } from '@/stores/toastStore.ts';
  * 성공 시 플래너 스토어도 함께 정리한다(`forgetCourse`). 헤더의 '플래너' 탭은
  * `/planner/`(index 라우트, courseId 없음)로 가고 그 경로는 **서버 검증 없이 스토어를
  * 그대로 그리므로**, 여기서 비우지 않으면 방금 지운 코스가 멀쩡히 보이고 '변경 저장'이
- * 404 를 맞는다.
+ * 404 를 맞는다. 스토어가 영속화되면서 그 잔상이 새로고침·재부팅까지 살아남게 됐다.
  */
 export interface CourseDelete {
   /** 삭제 요청 진행 중 */

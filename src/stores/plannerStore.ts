@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type {
   CourseDetail,
@@ -8,6 +9,7 @@ import type {
   Transport,
 } from '@/api/tourCourse.ts';
 import { CATEGORIES } from '@/mocks/planner.ts';
+import { authSessionKey, useAuthStore } from '@/stores/authStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 import { isValidTourCoord } from '@/utils/coords.ts';
 import { httpsUrl } from '@/utils/format.ts';
@@ -31,8 +33,13 @@ import type {
  * 표시 전용 상태(리스트/지도 토글, 카테고리 필터, 모바일 탭, 인라인 편집 여부)는
  * 각 컴포넌트 로컬 state 로 두고 여기에는 두지 않는다.
  *
- * 들고 있던 코스가 서버에서 사라지면(GBC013 삭제·404/403) `forgetCourse()` 로 비운다 —
- * 호출부는 `useCourseDelete`·`useCourseAlive`·`useCourseDetail`.
+ * **영속화(localStorage)** — 새로고침으로 코스가 통째로 사라지지 않도록 데이터 부분을
+ * `persist` 로 저장한다. 게스트 코스는 소유자가 없어 GBC012 로 되불러올 수 없으므로
+ * (`/planner/` index 라우트) 저장분이 **유일한 복구 수단**이다. 저장 대상은
+ * `persistedSlice`, 스키마 변경 시 폐기는 `version`/`migrate` 참조.
+ * 저장분의 수명은 아래 두 장치가 관리한다:
+ *   - 세션 전환(로그아웃·계정 변경) → 파일 하단 `useAuthStore.subscribe` 가 `reset()`
+ *   - 서버에서 삭제된 코스 → `forgetCourse()` (`useCourseDelete`·`useCourseAlive`·`useCourseDetail`)
  */
 
 interface Search {
@@ -70,8 +77,8 @@ export interface LoadFromApiContext {
 
 /**
  * 스토어의 **데이터** 부분(액션 제외).
- * 초기화(`INITIAL`)와 리셋이 이 모양을 기준으로 삼는다 — 필드를 늘릴 때
- * 두 곳이 따로 놀지 않도록 타입으로 묶어 둔다.
+ * 초기화(`INITIAL`)·리셋·영속화가 모두 이 모양을 기준으로 삼는다 — 필드를 늘릴 때
+ * 세 곳이 따로 놀지 않도록 타입으로 묶어 둔다.
  */
 interface PlannerData {
   /** 서버 코스 id. 게스트 생성 후 저장(GBC016)·상세(GBC012)에서 사용. 미생성 시 null. */
@@ -80,11 +87,26 @@ interface PlannerData {
    * 이 코스가 **내 계정에 귀속**됐는지. 생성 응답의 `login:true`·상세 조회(GBC012)·
    * 저장(assign) 성공에서 true 가 된다.
    *
-   * 소유 여부를 알아야 하는 자리가 둘 있어 스토어에 둔다:
-   *  - 저장 버튼의 역할 분기(미소유=assign / 소유=변경 저장).
+   * 새로고침 뒤에도 소유 여부를 알아야 하는 자리가 둘 있어 스토어에 둔다(영속화 대상):
+   *  - 저장 버튼의 역할 분기(미소유=assign / 소유=변경 저장) — 예전엔 `saved || :courseId`
+   *    URL 로만 판단해 복원된 코스를 미소유로 오인, assign 403 을 부를 수 있었다.
    *  - 존재 확인(`useCourseAlive`). 게스트 코스는 GBC012 로 조회할 수 없어 검증 대상이 아니다.
    */
   owned: boolean;
+  /**
+   * 이 코스를 **이번 세션에서 직접 실었는가**(생성·상세 조회). 저장분에서 복원되면 false.
+   * ⚠️ 영속화 제외 — 복원된 상태가 "방금 만든 것"으로 보이면 안 된다.
+   *
+   * `Planner` 의 상세 재조회 생략(`skipDetail`) 판단에 쓴다. `location.state` 는 history 에
+   * 저장돼 **새로고침해도 살아남으므로**, 이 플래그가 없으면 복원 후에도 `fromCreate` 가
+   * 계속 true 로 남아 서버 상세를 영영 다시 부르지 않는다(= 삭제·원격 수정이 반영 안 됨).
+   */
+  sessionFresh: boolean;
+  /**
+   * 저장분을 만든 세션(`authSessionKey()`). 로그아웃·계정 전환으로 남의 코스가 보이는 걸
+   * 막는 기준이다. 파일 하단 구독이 판정하고, 판정 규칙도 그쪽 주석에 있다.
+   */
+  ownerKey: string | null;
   search: Search;
   /**
    * 코스의 이동수단(F2). 생성(홈 검색 값)·상세 응답에서 주입하고 예산 탭에서 바꿀 수 있다.
@@ -190,13 +212,13 @@ interface PlannerActions {
   /** 소유권 이전(GBC016) 성공 시 호출. 게스트 코스가 내 코스가 됐음을 기록한다. */
   markOwned: () => void;
   /**
-   * 플래너를 초기 상태로 되돌린다.
-   * 코스 삭제처럼 "들고 있던 코스가 더는 유효하지 않다"는 사실에만 쓴다.
+   * 플래너를 초기 상태로 되돌린다(저장분도 함께 비워진다).
+   * 세션 전환·코스 삭제처럼 "들고 있던 코스가 더는 유효하지 않다"는 사실에만 쓴다.
    */
   reset: () => void;
   /**
    * **그 코스를 들고 있을 때만** 비운다. 서버에서 사라진 코스(GBC013 삭제·404/403)를
-   * 화면에서 걷어내는 단일 창구다 — 호출부가 `courseId` 를 대조하는 규칙을
+   * 화면과 저장분에서 걷어내는 단일 창구다 — 호출부가 `courseId` 를 대조하는 규칙을
    * 저마다 복제하지 않도록 스토어의 불변식으로 둔다.
    */
   forgetCourse: (courseId: number) => void;
@@ -371,6 +393,8 @@ function mergeSources(
 const INITIAL: PlannerData = {
   courseId: null,
   owned: false,
+  sessionFresh: false,
+  ownerKey: null,
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
   transport: 'CAR',
   transportOverride: null,
@@ -386,262 +410,369 @@ const INITIAL: PlannerData = {
   dirty: false,
 };
 
-export const usePlannerStore = create<PlannerState>((set, get) => ({
-  ...INITIAL,
+/** localStorage 키. 스키마가 바뀌면 `PERSIST_VERSION` 만 올리면 된다(옛 저장분은 폐기). */
+const PERSIST_KEY = 'gb-coco.planner';
+const PERSIST_VERSION = 1;
 
-  resolvePoi: (id) => {
-    const { apiPois, poiCatalog, placeCoords } = get();
-    return mergePoi(apiPois[id], poiCatalog[id], placeCoords[id]);
-  },
-
-  registerPois: (pois) =>
-    set((s) => {
-      const next = { ...s.poiCatalog };
-      pois.forEach((p) => {
-        next[p.id] = p;
-      });
-      return { poiCatalog: next };
+/**
+ * 영속화 대상 추리기.
+ *
+ * 제외:
+ *  - `drawer` — 복원하면 새로고침만 했는데 POI 드로어가 저절로 열린다.
+ *  - `sessionFresh` — "이번 세션에서 실었다"는 뜻이라 복원되면 거짓이 된다(필드 주석 참조).
+ *  - `poiCatalog` **통째로** — 브라우즈한 POI 전부라 저장분이 계속 불어난다.
+ *
+ * 다만 결과 패널에서 코스에 담기만 하고 아직 서버에 저장하지 않은 장소는 `apiPois` 에
+ * 없어서, 카탈로그를 전부 버리면 복원 후 `resolvePoi` 가 undefined 를 돌려주고 코스·예산에
+ * 빈 칸이 남는다 → **코스에 편성된 id 만** 남긴다.
+ */
+function persistedSlice(s: PlannerState): PlannerData {
+  const poiCatalog: Record<string, Poi> = {};
+  s.course.days.forEach((d) =>
+    d.items.forEach((id) => {
+      if (s.poiCatalog[id]) poiCatalog[id] = s.poiCatalog[id];
     }),
+  );
+  return {
+    ...INITIAL,
+    courseId: s.courseId,
+    owned: s.owned,
+    ownerKey: s.ownerKey,
+    search: s.search,
+    transport: s.transport,
+    transportOverride: s.transportOverride,
+    course: s.course,
+    apiPois: s.apiPois,
+    poiCatalog,
+    baseSchedule: s.baseSchedule,
+    activeDay: s.activeDay,
+    overrides: s.overrides,
+    placeTimes: s.placeTimes,
+    placeCoords: s.placeCoords,
+    dirty: s.dirty,
+  };
+}
 
-  loadFromApi: (res, ctx) => {
-    const apiPois: Record<string, Poi> = {};
-    const days: CourseDay[] = res.schedule.map((day, i) => {
-      const places = [...day.places].sort((a, b) => a.seq - b.seq);
-      const items: string[] = [];
-      places.forEach((place) => {
-        const key = String(place.contentId);
-        apiPois[key] = synthesizePoi(place, ctx.dests[0] ?? '');
-        // 하루 내 동일 contentId 중복 방지: items 는 React key·DnD sortable id 로 쓰여
-        // 중복되면 key 충돌·재정렬 오작동이 난다(addPoi 의 includes 가드와 동일한 불변식).
-        if (!items.includes(key)) items.push(key);
-      });
-      return { label: `Day ${i + 1}`, items };
-    });
-    set({
-      courseId: res.courseId,
-      // 로그인 상태로 생성했으면(GBC010 `login:true`) 서버가 이미 내 계정에 귀속한 코스다.
-      owned: res.login === true,
-      apiPois,
-      baseSchedule: res.schedule,
-      transport: ctx.transport,
-      transportOverride: null,
-      // 제목은 서버가 저장한 값(GBC010 응답)이 정본 — 목록(GBC011)·상세(GBC012)와 같은 문자열이다.
-      // 비어 있을 때만 홈에서 만든 폴백을 쓴다.
-      course: { title: res.title?.trim() || ctx.title, days },
-      search: {
-        dests: ctx.dests,
-        start: ctx.start,
-        end: ctx.end,
-        pax: ctx.pax,
-        themes: ctx.themes,
+export const usePlannerStore = create<PlannerState>()(
+  persist(
+    (set, get) => ({
+      ...INITIAL,
+
+      resolvePoi: (id) => {
+        const { apiPois, poiCatalog, placeCoords } = get();
+        return mergePoi(apiPois[id], poiCatalog[id], placeCoords[id]);
       },
-      activeDay: 0,
-      overrides: {},
-      placeTimes: {},
-      drawer: { open: false, poiId: null },
-      dirty: false,
-    });
-  },
 
-  loadDetail: (detail) => {
-    const apiPois: Record<string, Poi> = {};
-    const days: CourseDay[] = detail.schedule.map((day, i) => {
-      const places = [...day.places].sort((a, b) => a.seq - b.seq);
-      const items: string[] = [];
-      places.forEach((place) => {
-        const key = String(place.contentId);
-        // 상세 응답엔 지역 필드가 없어 region 은 빈 문자열(요약 지역명은 '경상북도' 폴백).
-        apiPois[key] = synthesizePoi(place, '');
-        // 하루 내 동일 contentId 중복 방지(loadFromApi 와 동일 불변식).
-        if (!items.includes(key)) items.push(key);
-      });
-      return { label: `Day ${i + 1}`, items };
-    });
-    set({
-      courseId: detail.courseId,
-      // 상세(GBC012)는 소유자 인증 필수 — 응답을 받았다는 것 자체가 소유의 증거다.
-      owned: true,
-      apiPois,
-      baseSchedule: detail.schedule,
-      transport: detail.transport,
-      transportOverride: null,
-      course: { title: detail.title, days },
-      search: {
-        // 상세 응답엔 sigunguCode/지역이 없다 → dests 비움(Planner 는 '경상북도'로 폴백).
-        dests: [],
-        start: detail.startDate,
-        end: detail.endDate,
-        pax: detail.peopleCount,
-        themes: detail.theme,
-      },
-      activeDay: 0,
-      overrides: {},
-      placeTimes: {},
-      drawer: { open: false, poiId: null },
-      dirty: false,
-    });
-  },
-
-  setSearch: (patch) => set((s) => ({ search: { ...s.search, ...patch } })),
-
-  setTitle: (title) => set((s) => ({ course: { ...s.course, title } })),
-
-  setActiveDay: (i) => set({ activeDay: i }),
-
-  addPoi: (poiId, index) => {
-    const s = get();
-    const day = s.course.days[s.activeDay];
-    if (!day) return;
-    const poi = s.resolvePoi(poiId);
-    if (day.items.includes(poiId)) {
-      if (poi) toast.info(`'${poi.name}'은(는) 이미 코스에 있어요`);
-      return;
-    }
-    const items = [...day.items];
-    const at =
-      index == null ? items.length : Math.max(0, Math.min(index, items.length));
-    items.splice(at, 0, poiId);
-    set({
-      course: {
-        ...s.course,
-        days: s.course.days.map((d, i) =>
-          i === s.activeDay ? { ...d, items } : d,
-        ),
-      },
-      dirty: true,
-    });
-    if (poi) toast.success(`'${poi.name}' ${day.label}에 추가`);
-  },
-
-  removePoi: (dayIdx, poiId) =>
-    set((s) => {
-      const day = s.course.days[dayIdx];
-      // 없는 장소를 지우려 한 경우(중복 발사 등)는 dirty 를 세우지 않는다.
-      if (!day?.items.includes(poiId)) return {};
-      return {
-        course: {
-          ...s.course,
-          days: s.course.days.map((d, i) =>
-            i === dayIdx
-              ? { ...d, items: d.items.filter((x) => x !== poiId) }
-              : d,
-          ),
-        },
-        dirty: true,
-      };
-    }),
-
-  reorder: (dayIdx, from, to) =>
-    set((s) => {
-      const day = s.course.days[dayIdx];
-      // 제자리 드롭(from === to)·범위 밖은 no-op — dirty 도 세우지 않는다.
-      if (
-        !day ||
-        from < 0 ||
-        to < 0 ||
-        from >= day.items.length ||
-        to >= day.items.length ||
-        from === to
-      )
-        return {};
-      const items = [...day.items];
-      const [moved] = items.splice(from, 1);
-      items.splice(to, 0, moved);
-      return {
-        course: {
-          ...s.course,
-          days: s.course.days.map((d, i) =>
-            i === dayIdx ? { ...d, items } : d,
-          ),
-        },
-        dirty: true,
-      };
-    }),
-
-  editCost: (poiId, val) =>
-    set((s) => {
-      const next = Math.max(0, val);
-      if (s.overrides[poiId] === next) return {};
-      return { overrides: { ...s.overrides, [poiId]: next }, dirty: true };
-    }),
-
-  resetCost: (poiId) =>
-    set((s) => {
-      if (s.overrides[poiId] == null) return {};
-      const next = { ...s.overrides };
-      delete next[poiId];
-      return { overrides: next, dirty: true };
-    }),
-
-  // 이동수단·교통비는 **dirty 를 세우지 않는다** — 서버에 보낼 자리가 없어서(계약 추적표 #6)
-  // '변경 저장'을 활성화하면 저장 후 '저장됨'으로 바뀌는데 정작 수단은 서버에 남지 않아
-  // 사용자를 속이게 된다. 저장 경로가 생기면 여기에 `dirty: true` 를 더하면 된다.
-  setTransport: (transport) =>
-    set((s) => (s.transport === transport ? {} : { transport })),
-
-  setTransportOverride: (val) =>
-    set((s) => {
-      const next = Number.isFinite(val) ? Math.max(0, Math.round(val)) : 0;
-      return s.transportOverride === next ? {} : { transportOverride: next };
-    }),
-
-  resetTransportOverride: () =>
-    set((s) =>
-      s.transportOverride == null ? {} : { transportOverride: null },
-    ),
-
-  setPlaceTime: (poiId, time) => {
-    const s = get();
-    const next = normalizeTime(time);
-    const cur = s.placeTimes[poiId];
-    // 같은 값 재입력은 no-op — 편집하지 않은 코스를 dirty 로 만들지 않는다(editCost 와 같은 규약).
-    if ((cur?.time ?? undefined) === next) return;
-    set({
-      placeTimes: withTimeEdit(s.placeTimes, poiId, { time: next }),
-      dirty: true,
-    });
-    if (next) warnIfTimesOutOfOrder(get(), poiId);
-  },
-
-  setPlaceDuration: (poiId, minutes) =>
-    set((s) => {
-      const next = Number.isFinite(minutes)
-        ? Math.max(0, Math.min(MAX_DURATION_MINUTES, Math.round(minutes)))
-        : undefined;
-      if ((s.placeTimes[poiId]?.durationMinutes ?? undefined) === next)
-        return {};
-      return {
-        placeTimes: withTimeEdit(s.placeTimes, poiId, {
-          durationMinutes: next,
+      registerPois: (pois) =>
+        set((s) => {
+          const next = { ...s.poiCatalog };
+          pois.forEach((p) => {
+            next[p.id] = p;
+          });
+          return { poiCatalog: next };
         }),
-        dirty: true,
-      };
+
+      loadFromApi: (res, ctx) => {
+        const apiPois: Record<string, Poi> = {};
+        const days: CourseDay[] = res.schedule.map((day, i) => {
+          const places = [...day.places].sort((a, b) => a.seq - b.seq);
+          const items: string[] = [];
+          places.forEach((place) => {
+            const key = String(place.contentId);
+            apiPois[key] = synthesizePoi(place, ctx.dests[0] ?? '');
+            // 하루 내 동일 contentId 중복 방지: items 는 React key·DnD sortable id 로 쓰여
+            // 중복되면 key 충돌·재정렬 오작동이 난다(addPoi 의 includes 가드와 동일한 불변식).
+            if (!items.includes(key)) items.push(key);
+          });
+          return { label: `Day ${i + 1}`, items };
+        });
+        set({
+          courseId: res.courseId,
+          // 로그인 상태로 생성했으면(GBC010 `login:true`) 서버가 이미 내 계정에 귀속한 코스다.
+          owned: res.login === true,
+          sessionFresh: true,
+          ownerKey: authSessionKey(),
+          apiPois,
+          baseSchedule: res.schedule,
+          transport: ctx.transport,
+          transportOverride: null,
+          // 제목은 서버가 저장한 값(GBC010 응답)이 정본 — 목록(GBC011)·상세(GBC012)와 같은 문자열이다.
+          // 비어 있을 때만 홈에서 만든 폴백을 쓴다.
+          course: { title: res.title?.trim() || ctx.title, days },
+          search: {
+            dests: ctx.dests,
+            start: ctx.start,
+            end: ctx.end,
+            pax: ctx.pax,
+            themes: ctx.themes,
+          },
+          activeDay: 0,
+          overrides: {},
+          placeTimes: {},
+          drawer: { open: false, poiId: null },
+          dirty: false,
+        });
+      },
+
+      loadDetail: (detail) => {
+        const apiPois: Record<string, Poi> = {};
+        const days: CourseDay[] = detail.schedule.map((day, i) => {
+          const places = [...day.places].sort((a, b) => a.seq - b.seq);
+          const items: string[] = [];
+          places.forEach((place) => {
+            const key = String(place.contentId);
+            // 상세 응답엔 지역 필드가 없어 region 은 빈 문자열(요약 지역명은 '경상북도' 폴백).
+            apiPois[key] = synthesizePoi(place, '');
+            // 하루 내 동일 contentId 중복 방지(loadFromApi 와 동일 불변식).
+            if (!items.includes(key)) items.push(key);
+          });
+          return { label: `Day ${i + 1}`, items };
+        });
+        set({
+          courseId: detail.courseId,
+          // 상세(GBC012)는 소유자 인증 필수 — 응답을 받았다는 것 자체가 소유의 증거다.
+          owned: true,
+          sessionFresh: true,
+          ownerKey: authSessionKey(),
+          apiPois,
+          baseSchedule: detail.schedule,
+          transport: detail.transport,
+          transportOverride: null,
+          course: { title: detail.title, days },
+          search: {
+            // 상세 응답엔 sigunguCode/지역이 없다 → dests 비움(Planner 는 '경상북도'로 폴백).
+            dests: [],
+            start: detail.startDate,
+            end: detail.endDate,
+            pax: detail.peopleCount,
+            themes: detail.theme,
+          },
+          activeDay: 0,
+          overrides: {},
+          placeTimes: {},
+          drawer: { open: false, poiId: null },
+          dirty: false,
+        });
+      },
+
+      setSearch: (patch) => set((s) => ({ search: { ...s.search, ...patch } })),
+
+      setTitle: (title) => set((s) => ({ course: { ...s.course, title } })),
+
+      setActiveDay: (i) => set({ activeDay: i }),
+
+      addPoi: (poiId, index) => {
+        const s = get();
+        const day = s.course.days[s.activeDay];
+        if (!day) return;
+        const poi = s.resolvePoi(poiId);
+        if (day.items.includes(poiId)) {
+          if (poi) toast.info(`'${poi.name}'은(는) 이미 코스에 있어요`);
+          return;
+        }
+        const items = [...day.items];
+        const at =
+          index == null
+            ? items.length
+            : Math.max(0, Math.min(index, items.length));
+        items.splice(at, 0, poiId);
+        set({
+          course: {
+            ...s.course,
+            days: s.course.days.map((d, i) =>
+              i === s.activeDay ? { ...d, items } : d,
+            ),
+          },
+          dirty: true,
+        });
+        if (poi) toast.success(`'${poi.name}' ${day.label}에 추가`);
+      },
+
+      removePoi: (dayIdx, poiId) =>
+        set((s) => {
+          const day = s.course.days[dayIdx];
+          // 없는 장소를 지우려 한 경우(중복 발사 등)는 dirty 를 세우지 않는다.
+          if (!day?.items.includes(poiId)) return {};
+          return {
+            course: {
+              ...s.course,
+              days: s.course.days.map((d, i) =>
+                i === dayIdx
+                  ? { ...d, items: d.items.filter((x) => x !== poiId) }
+                  : d,
+              ),
+            },
+            dirty: true,
+          };
+        }),
+
+      reorder: (dayIdx, from, to) =>
+        set((s) => {
+          const day = s.course.days[dayIdx];
+          // 제자리 드롭(from === to)·범위 밖은 no-op — dirty 도 세우지 않는다.
+          if (
+            !day ||
+            from < 0 ||
+            to < 0 ||
+            from >= day.items.length ||
+            to >= day.items.length ||
+            from === to
+          )
+            return {};
+          const items = [...day.items];
+          const [moved] = items.splice(from, 1);
+          items.splice(to, 0, moved);
+          return {
+            course: {
+              ...s.course,
+              days: s.course.days.map((d, i) =>
+                i === dayIdx ? { ...d, items } : d,
+              ),
+            },
+            dirty: true,
+          };
+        }),
+
+      editCost: (poiId, val) =>
+        set((s) => {
+          const next = Math.max(0, val);
+          if (s.overrides[poiId] === next) return {};
+          return { overrides: { ...s.overrides, [poiId]: next }, dirty: true };
+        }),
+
+      resetCost: (poiId) =>
+        set((s) => {
+          if (s.overrides[poiId] == null) return {};
+          const next = { ...s.overrides };
+          delete next[poiId];
+          return { overrides: next, dirty: true };
+        }),
+
+      // 이동수단·교통비는 **dirty 를 세우지 않는다** — 서버에 보낼 자리가 없어서(계약 추적표 #6)
+      // '변경 저장'을 활성화하면 저장 후 '저장됨'으로 바뀌는데 정작 수단은 서버에 남지 않아
+      // 사용자를 속이게 된다. 저장 경로가 생기면 여기에 `dirty: true` 를 더하면 된다.
+      setTransport: (transport) =>
+        set((s) => (s.transport === transport ? {} : { transport })),
+
+      setTransportOverride: (val) =>
+        set((s) => {
+          const next = Number.isFinite(val) ? Math.max(0, Math.round(val)) : 0;
+          return s.transportOverride === next
+            ? {}
+            : { transportOverride: next };
+        }),
+
+      resetTransportOverride: () =>
+        set((s) =>
+          s.transportOverride == null ? {} : { transportOverride: null },
+        ),
+
+      setPlaceTime: (poiId, time) => {
+        const s = get();
+        const next = normalizeTime(time);
+        const cur = s.placeTimes[poiId];
+        // 같은 값 재입력은 no-op — 편집하지 않은 코스를 dirty 로 만들지 않는다(editCost 와 같은 규약).
+        if ((cur?.time ?? undefined) === next) return;
+        set({
+          placeTimes: withTimeEdit(s.placeTimes, poiId, { time: next }),
+          dirty: true,
+        });
+        if (next) warnIfTimesOutOfOrder(get(), poiId);
+      },
+
+      setPlaceDuration: (poiId, minutes) =>
+        set((s) => {
+          const next = Number.isFinite(minutes)
+            ? Math.max(0, Math.min(MAX_DURATION_MINUTES, Math.round(minutes)))
+            : undefined;
+          if ((s.placeTimes[poiId]?.durationMinutes ?? undefined) === next)
+            return {};
+          return {
+            placeTimes: withTimeEdit(s.placeTimes, poiId, {
+              durationMinutes: next,
+            }),
+            dirty: true,
+          };
+        }),
+
+      setPlaceCoords: (poiId, coords) =>
+        set((s) =>
+          s.placeCoords[poiId]
+            ? {}
+            : { placeCoords: { ...s.placeCoords, [poiId]: coords } },
+        ),
+
+      resetPlaceTime: (poiId) =>
+        set((s) => {
+          if (s.placeTimes[poiId] == null) return {};
+          const placeTimes = { ...s.placeTimes };
+          delete placeTimes[poiId];
+          return { placeTimes, dirty: true };
+        }),
+
+      markPristine: () => set({ dirty: false }),
+
+      markOwned: () =>
+        set((s) =>
+          s.owned ? {} : { owned: true, ownerKey: authSessionKey() },
+        ),
+
+      reset: () => set({ ...INITIAL }),
+
+      forgetCourse: (courseId) =>
+        set((s) => (s.courseId === courseId ? { ...INITIAL } : {})),
+
+      openDrawer: (poiId) => set({ drawer: { open: true, poiId } }),
+      closeDrawer: () => set((s) => ({ drawer: { ...s.drawer, open: false } })),
     }),
+    {
+      name: PERSIST_KEY,
+      version: PERSIST_VERSION,
+      storage: createJSONStorage(() => localStorage),
+      partialize: persistedSlice,
+      // 스키마가 바뀌면 옛 저장분은 되살리지 않고 버린다 — 필드가 어긋난 상태로 복원되면
+      // 화면이 런타임 에러를 내고, 코스 하나는 언제든 다시 만들 수 있는 값이라 안전 우선.
+      migrate: () => ({ ...INITIAL }),
+    },
+  ),
+);
 
-  setPlaceCoords: (poiId, coords) =>
-    set((s) =>
-      s.placeCoords[poiId]
-        ? {}
-        : { placeCoords: { ...s.placeCoords, [poiId]: coords } },
-    ),
+/**
+ * 세션이 바뀌면 플래너를 비운다(영속화의 짝).
+ * 없으면 로그아웃·계정 전환 뒤에도 이전 사용자의 코스가 저장분에서 되살아난다
+ * (`poiLikeStore` 의 찜 리셋과 같은 결의 문제다).
+ *
+ * 판정 규칙 — 함부로 비우면 오히려 사고가 나므로 두 가지를 지킨다:
+ *  1. **부팅 복원 중(idle/loading)에는 판단하지 않는다.** 재발급이 끝나기 전에는 누구나
+ *     'guest' 로 보여서, 여기서 비우면 로그인 사용자의 코스가 매번 날아간다.
+ *  2. **게스트 → 로그인 승격은 유지한다.** `useCourseSave` 가 로그인 왕복 뒤 대기 중이던
+ *     저장(assign)을 이어 실행하는데, 그 길목에서 비우면 방금 저장하려던 코스가 사라진다.
+ *     비우는 건 "소유 세션(u*)에서 다른 세션으로 넘어갈 때"뿐이다.
+ *
+ * 첫 정착은 저장분의 `ownerKey` 와 비교한다 — 브라우저를 껐다 켠 뒤 다른 계정으로
+ * 로그인하거나 로그아웃 상태로 부팅하는 경우(공용 PC)를 덮기 위해서다.
+ */
+let lastSettledKey: string | null = null;
 
-  resetPlaceTime: (poiId) =>
-    set((s) => {
-      if (s.placeTimes[poiId] == null) return {};
-      const placeTimes = { ...s.placeTimes };
-      delete placeTimes[poiId];
-      return { placeTimes, dirty: true };
-    }),
+function syncOwnerSession() {
+  const { status } = useAuthStore.getState();
+  if (status !== 'authenticated' && status !== 'guest') return;
 
-  markPristine: () => set({ dirty: false }),
+  const key = authSessionKey();
+  const prev = lastSettledKey ?? usePlannerStore.getState().ownerKey;
+  lastSettledKey = key;
+  if (prev === key) return;
 
-  markOwned: () => set((s) => (s.owned ? {} : { owned: true })),
+  if (prev == null || !prev.startsWith('u')) {
+    // 미소유(게스트) 코스는 그대로 두고, 주인만 지금 세션으로 옮겨 적는다.
+    usePlannerStore.setState({ ownerKey: key });
+    return;
+  }
+  usePlannerStore.getState().reset();
+}
 
-  reset: () => set({ ...INITIAL }),
-
-  forgetCourse: (courseId) =>
-    set((s) => (s.courseId === courseId ? { ...INITIAL } : {})),
-
-  openDrawer: (poiId) => set({ drawer: { open: true, poiId } }),
-  closeDrawer: () => set((s) => ({ drawer: { ...s.drawer, open: false } })),
-}));
+// 구독 등록 **전에** 한 번 직접 돌린다. 이 모듈은 lazy 청크로 실려 인증이 이미 정착한 뒤에
+// 로드될 수 있는데, 그러면 구독만으로는 다음 인증 변화가 올 때까지 판정이 미뤄져
+// 그 사이 이전 사용자의 저장분이 그대로 보인다.
+syncOwnerSession();
+useAuthStore.subscribe(syncOwnerSession);
