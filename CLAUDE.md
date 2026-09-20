@@ -48,7 +48,7 @@ src/
 - `src/hooks/useAsync.ts` — 로딩/에러/데이터 캡슐화 훅. 데이터 화면은 이 훅 + 공용 `EmptyState`/`ErrorState`/`Skeleton` 재사용.
 - `src/utils/cn.ts` — 모든 클래스 합성에 사용.
 - `src/index.css` — `@theme` 색상 토큰, daisyUI 테마 활성화, 폰트.
-- `.env.development` — `VITE_KAKAO_JAVASCRIPT_KEY`, `VITE_REDIRECT_URI`. 커밋·로그 노출 금지.
+- `.env.development` / `.env.production` — `VITE_KAKAO_JAVASCRIPT_KEY`, `VITE_REDIRECT_URI`, `VITE_API_BASE_URL`, `VITE_KAKAO_PAY_URI`(선택). 커밋·로그 노출 금지.
 
 ## 규칙
 
@@ -88,3 +88,6 @@ src/
 - 코딩 컨벤션 상세: [CONVENTION.md](./CONVENTION.md)
 - 디자인 시스템(색·타이포·컴포넌트 패턴): [DESIGN.md](./DESIGN.md)
 - 기여 절차·브랜치 전략·PR 규칙: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- **구현 규약·뒤집지 말 설계 결정: [docs/DECISIONS.md](./docs/DECISIONS.md)** — 새 UI·오버레이·지도 요소를 넣기 전에 읽는다.
+- 남은 작업(v1.1 백로그): [docs/FE_개발_진행상황.md](./docs/FE_개발_진행상황.md) · FE↔BE 계약: [docs/FE_계약_추적표.md](./docs/FE_계약_추적표.md)
+- v1.0 이력 원문: [docs/FE_개발_진행상황_아카이브.md](./docs/FE_개발_진행상황_아카이브.md) (크다 — 필요한 섹션만 연다) · 기획 산출물: [docs/archive/](./docs/archive/)

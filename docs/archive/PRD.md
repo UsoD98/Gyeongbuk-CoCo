@@ -1,9 +1,14 @@
 # 경북 CoCo — 통합 제품 기획서 (PRD)
 
+> 🗄️ **보존 문서 — 갱신하지 않는다.** 2026-09-20 v1.0 문서 정리에서 `docs/` → `docs/archive/` 로 옮겼다.
+> 이 문서는 **기획 단계(기준일 2026-06-06)의 산출물**이며 배포된 v1.0 과 다를 수 있다. 현행 정본은
+> [`README.md`](../../README.md)(제품) · [`docs/DECISIONS.md`](../DECISIONS.md)(설계 결정) · [`docs/FE_개발_진행상황.md`](../FE_개발_진행상황.md)(남은 작업) 이다.
+> 본문의 `PRD_BACK.md`·`FEATURES_BACK.md` 링크는 v1.0 정리에서 삭제된 문서를 가리킨다 — `git show v1.0:docs/<파일>` 로 꺼낸다.
+
 > 출처: 『2026 관광데이터 활용 공모전』 웹·앱 개발 부문 제안서.
 > 본 문서는 프론트엔드 PRD([PRD_FRONT.md](PRD_FRONT.md))와 백엔드 PRD([PRD_BACK.md](PRD_BACK.md))를 통합한 **전체 서비스 기준 PRD**다.
 > FE·BE 양측이 공유하는 제품 비전·핵심 기능·화면-API 계약·미결 사항을 한 곳에 정리한다.
-> 화면 인벤토리(§8)는 **인터랙티브 화면 설계 프로토타입**(`경북 CoCo 화면 설계 (standalone).html`)과 정합한다. 시각 설계 SoT는 해당 프로토타입 + [DESIGN.md](../DESIGN.md) 토큰이다.
+> 화면 인벤토리(§8)는 **인터랙티브 화면 설계 프로토타입**(`경북 CoCo 화면 설계 (standalone).html`)과 정합한다. 시각 설계 SoT는 해당 프로토타입 + [DESIGN.md](../../DESIGN.md) 토큰이다.
 > 버전 0.3 · 기준일 2026-06-06.
 
 ---
@@ -334,6 +339,6 @@ Day별 배치: 유형별 할당량(숙박1·식사2·관광N·문화M) 규칙 �
 - 프론트엔드 PRD: [PRD_FRONT.md](PRD_FRONT.md)
 - 백엔드 기능 분해도: [FEATURES_BACK.md](FEATURES_BACK.md)
 - 프론트엔드 기능 분해도: [FEATURES_FRONT.md](FEATURES_FRONT.md)
-- 디자인 시스템(시각 SoT): [DESIGN.md](../DESIGN.md)
+- 디자인 시스템(시각 SoT): [DESIGN.md](../../DESIGN.md)
 - 시각 설계 원본: `경북 CoCo 화면 설계 (standalone).html` (인터랙티브 프로토타입)
-- 백엔드 개발 가이드: [CLAUDE.md](CLAUDE.md)
+- 백엔드 개발 가이드: [CLAUDE.md](../../CLAUDE.md)
