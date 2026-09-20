@@ -30,6 +30,9 @@ import type {
  *
  * 표시 전용 상태(리스트/지도 토글, 카테고리 필터, 모바일 탭, 인라인 편집 여부)는
  * 각 컴포넌트 로컬 state 로 두고 여기에는 두지 않는다.
+ *
+ * 들고 있던 코스가 서버에서 사라지면(GBC013 삭제·404/403) `forgetCourse()` 로 비운다 —
+ * 호출부는 `useCourseDelete`·`useCourseAlive`·`useCourseDetail`.
  */
 
 interface Search {
@@ -65,9 +68,23 @@ export interface LoadFromApiContext {
   transport: Transport;
 }
 
-interface PlannerState {
+/**
+ * 스토어의 **데이터** 부분(액션 제외).
+ * 초기화(`INITIAL`)와 리셋이 이 모양을 기준으로 삼는다 — 필드를 늘릴 때
+ * 두 곳이 따로 놀지 않도록 타입으로 묶어 둔다.
+ */
+interface PlannerData {
   /** 서버 코스 id. 게스트 생성 후 저장(GBC016)·상세(GBC012)에서 사용. 미생성 시 null. */
   courseId: number | null;
+  /**
+   * 이 코스가 **내 계정에 귀속**됐는지. 생성 응답의 `login:true`·상세 조회(GBC012)·
+   * 저장(assign) 성공에서 true 가 된다.
+   *
+   * 소유 여부를 알아야 하는 자리가 둘 있어 스토어에 둔다:
+   *  - 저장 버튼의 역할 분기(미소유=assign / 소유=변경 저장).
+   *  - 존재 확인(`useCourseAlive`). 게스트 코스는 GBC012 로 조회할 수 없어 검증 대상이 아니다.
+   */
+  owned: boolean;
   search: Search;
   /**
    * 코스의 이동수단(F2). 생성(홈 검색 값)·상세 응답에서 주입하고 예산 탭에서 바꿀 수 있다.
@@ -126,7 +143,9 @@ interface PlannerState {
    * `markPristine()` 으로 되돌린다. "변경 저장" 버튼 활성화 조건.
    */
   dirty: boolean;
+}
 
+interface PlannerActions {
   /**
    * poiId → Poi. 코스 장소(apiPois) + 카탈로그를 병합해 해석한다.
    * ⚠️ **React 컴포넌트는 이걸 직접 구독하지 말 것** — 함수 참조가 고정이라
@@ -168,9 +187,24 @@ interface PlannerState {
   setPlaceCoords: (poiId: string, coords: LatLng) => void;
   /** 편집 내용을 서버에 반영 완료로 표시(GBC020 성공 시 `useCourseUpdate` 가 호출). */
   markPristine: () => void;
+  /** 소유권 이전(GBC016) 성공 시 호출. 게스트 코스가 내 코스가 됐음을 기록한다. */
+  markOwned: () => void;
+  /**
+   * 플래너를 초기 상태로 되돌린다.
+   * 코스 삭제처럼 "들고 있던 코스가 더는 유효하지 않다"는 사실에만 쓴다.
+   */
+  reset: () => void;
+  /**
+   * **그 코스를 들고 있을 때만** 비운다. 서버에서 사라진 코스(GBC013 삭제·404/403)를
+   * 화면에서 걷어내는 단일 창구다 — 호출부가 `courseId` 를 대조하는 규칙을
+   * 저마다 복제하지 않도록 스토어의 불변식으로 둔다.
+   */
+  forgetCourse: (courseId: number) => void;
   openDrawer: (poiId: string) => void;
   closeDrawer: () => void;
 }
+
+type PlannerState = PlannerData & PlannerActions;
 
 /** 백엔드 PlaceType(실측 7종) → UI PoiCat(4종) 매핑. */
 const PLACE_TYPE_TO_CAT: Record<string, PoiCat> = {
@@ -317,8 +351,7 @@ function mergeSources(
 ): Poi | undefined {
   if (!fromCourse) return fromCatalog;
   if (!fromCatalog) return fromCourse;
-  const courseHasName =
-    fromCourse.name !== placeholderPlaceName(fromCourse.id);
+  const courseHasName = fromCourse.name !== placeholderPlaceName(fromCourse.id);
   // 좌표는 **쌍으로** 고른다 — lat 은 한쪽, lng 은 다른 쪽에서 집으면 엉뚱한 지점이 된다.
   const coordSource = fromCatalog.lat != null ? fromCatalog : fromCourse;
   return {
@@ -334,8 +367,10 @@ function mergeSources(
   };
 }
 
-export const usePlannerStore = create<PlannerState>((set, get) => ({
+/** 부팅·리셋의 기준점. `reset`/`forgetCourse` 가 이걸 그대로 되돌린다. */
+const INITIAL: PlannerData = {
   courseId: null,
+  owned: false,
   search: { dests: [], start: '', end: '', pax: 1, themes: [] },
   transport: 'CAR',
   transportOverride: null,
@@ -349,6 +384,10 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   placeCoords: {},
   drawer: { open: false, poiId: null },
   dirty: false,
+};
+
+export const usePlannerStore = create<PlannerState>((set, get) => ({
+  ...INITIAL,
 
   resolvePoi: (id) => {
     const { apiPois, poiCatalog, placeCoords } = get();
@@ -380,6 +419,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     });
     set({
       courseId: res.courseId,
+      // 로그인 상태로 생성했으면(GBC010 `login:true`) 서버가 이미 내 계정에 귀속한 코스다.
+      owned: res.login === true,
       apiPois,
       baseSchedule: res.schedule,
       transport: ctx.transport,
@@ -418,6 +459,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     });
     set({
       courseId: detail.courseId,
+      // 상세(GBC012)는 소유자 인증 필수 — 응답을 받았다는 것 자체가 소유의 증거다.
+      owned: true,
       apiPois,
       baseSchedule: detail.schedule,
       transport: detail.transport,
@@ -507,7 +550,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       return {
         course: {
           ...s.course,
-          days: s.course.days.map((d, i) => (i === dayIdx ? { ...d, items } : d)),
+          days: s.course.days.map((d, i) =>
+            i === dayIdx ? { ...d, items } : d,
+          ),
         },
         dirty: true,
       };
@@ -541,7 +586,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     }),
 
   resetTransportOverride: () =>
-    set((s) => (s.transportOverride == null ? {} : { transportOverride: null })),
+    set((s) =>
+      s.transportOverride == null ? {} : { transportOverride: null },
+    ),
 
   setPlaceTime: (poiId, time) => {
     const s = get();
@@ -549,7 +596,10 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     const cur = s.placeTimes[poiId];
     // 같은 값 재입력은 no-op — 편집하지 않은 코스를 dirty 로 만들지 않는다(editCost 와 같은 규약).
     if ((cur?.time ?? undefined) === next) return;
-    set({ placeTimes: withTimeEdit(s.placeTimes, poiId, { time: next }), dirty: true });
+    set({
+      placeTimes: withTimeEdit(s.placeTimes, poiId, { time: next }),
+      dirty: true,
+    });
     if (next) warnIfTimesOutOfOrder(get(), poiId);
   },
 
@@ -558,7 +608,8 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       const next = Number.isFinite(minutes)
         ? Math.max(0, Math.min(MAX_DURATION_MINUTES, Math.round(minutes)))
         : undefined;
-      if ((s.placeTimes[poiId]?.durationMinutes ?? undefined) === next) return {};
+      if ((s.placeTimes[poiId]?.durationMinutes ?? undefined) === next)
+        return {};
       return {
         placeTimes: withTimeEdit(s.placeTimes, poiId, {
           durationMinutes: next,
@@ -583,6 +634,13 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     }),
 
   markPristine: () => set({ dirty: false }),
+
+  markOwned: () => set((s) => (s.owned ? {} : { owned: true })),
+
+  reset: () => set({ ...INITIAL }),
+
+  forgetCourse: (courseId) =>
+    set((s) => (s.courseId === courseId ? { ...INITIAL } : {})),
 
   openDrawer: (poiId) => set({ drawer: { open: true, poiId } }),
   closeDrawer: () => set((s) => ({ drawer: { ...s.drawer, open: false } })),

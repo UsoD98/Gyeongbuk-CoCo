@@ -1,8 +1,15 @@
 import { useCallback, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { Bookmark, Calendar, Compass, MapPin, Share2, Users } from 'lucide-react';
+import {
+  Bookmark,
+  Calendar,
+  Compass,
+  MapPin,
+  Share2,
+  Users,
+} from 'lucide-react';
 
-import { getApiErrorMessage } from '@/api/types.ts';
+import { getApiErrorMessage, isResourceGone } from '@/api/types.ts';
 import ErrorState from '@/components/common/ErrorState.tsx';
 import Loading from '@/components/common/Loading.tsx';
 import BudgetDashboard from '@/components/planner/BudgetDashboard.tsx';
@@ -12,6 +19,7 @@ import LoginGateModal from '@/components/planner/LoginGateModal.tsx';
 import PlannerDndProvider from '@/components/planner/PlannerDndProvider.tsx';
 import PoiDrawer from '@/components/planner/PoiDrawer.tsx';
 import ResultsPanel from '@/components/planner/ResultsPanel.tsx';
+import { useCourseAlive } from '@/hooks/useCourseAlive.ts';
 import { useCourseDetail } from '@/hooks/useCourseDetail.ts';
 import { useCourseSave } from '@/hooks/useCourseSave.ts';
 import { useCourseShare } from '@/hooks/useCourseShare.ts';
@@ -27,13 +35,15 @@ import { cn } from '@/utils/cn.ts';
 
 type MobileTab = 'results' | 'course' | 'budget';
 
-const PANEL_CARD = 'card flex flex-col overflow-hidden rounded-2xl bg-base-100 shadow-lg';
+const PANEL_CARD =
+  'card flex flex-col overflow-hidden rounded-2xl bg-base-100 shadow-lg';
 // 데스크톱 패널 높이: 뷰포트에 맞춰 늘리되(헤더·요약·여백 ≈ 15rem 차감) 하한 500px·상한 780px로
 // clamp — 작은 화면에선 답답하지 않게, 큰 모니터에선 아래 여백이 과하지 않게 한다.
 const PANEL_H = 'h-[clamp(500px,calc(100vh_-_15rem),780px)]';
 // 코스 패널(좌) 너비: 320~400px 사이에서 컨테이너 비례(26%)로 유연하게 —
 // 중간 폭(1024~1280)에선 360px 고정보다 좁아져 결과 패널에 여유를 준다.
-const PANEL_GRID = 'grid grid-cols-[clamp(320px,26%,400px)_1fr] items-start gap-5';
+const PANEL_GRID =
+  'grid grid-cols-[clamp(320px,26%,400px)_1fr] items-start gap-5';
 
 export default function Planner() {
   const { courseId: courseIdParam } = useParams();
@@ -42,6 +52,7 @@ export default function Planner() {
   const course = usePlannerStore((s) => s.course);
   const search = usePlannerStore((s) => s.search);
   const storeCourseId = usePlannerStore((s) => s.courseId);
+  const storeOwned = usePlannerStore((s) => s.owned);
 
   // 판정 기준은 로딩 플래그가 아니라 "스토어가 이 코스를 들고 있는가"다 —
   // 그래야 다른 코스로 URL 이 바뀌는 순간 이전 코스가 새 URL 아래 스치듯 렌더되지 않는다.
@@ -61,6 +72,10 @@ export default function Planner() {
   const { error: detailError, reload: reloadDetail } = useCourseDetail(
     skipDetail ? undefined : courseIdParam,
   );
+
+  // index 라우트(`/planner/`)에는 조회할 URL 이 없어 위 훅이 놀고, 스토어를 그대로 그린다 →
+  // 원격에서 지워진 코스가 남을 수 있어 존재 확인을 따로 건다(소유 코스 한정, 훅 주석 참조).
+  useCourseAlive(!courseIdParam);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const getSigunguLabel = useSigunguStore((s) => s.getSigunguLabel);
@@ -102,10 +117,25 @@ export default function Planner() {
   // (스토어에 이미 있으면 — 로그인 생성 직후 등 — 즉시 렌더하고 상세는 백그라운드로 갱신.)
   if (courseIdParam && !hasParamCourse) {
     if (detailError) {
+      // 삭제됐거나 내 코스가 아니면 '다시 시도'는 같은 404/403 을 반복할 뿐이다 →
+      // 재시도 대신 컬렉션으로 안내한다. (스토어 정리는 `useCourseDetail` 이 이미 했다.)
+      const gone = isResourceGone(detailError);
       return (
         <ErrorState
-          description={getApiErrorMessage(detailError, '코스를 불러오지 못했어요')}
-          onRetry={reloadDetail}
+          title={gone ? '코스를 찾을 수 없어요' : undefined}
+          description={
+            gone
+              ? '삭제됐거나 접근할 수 없는 코스예요.'
+              : getApiErrorMessage(detailError, '코스를 불러오지 못했어요')
+          }
+          onRetry={gone ? undefined : reloadDetail}
+          action={
+            gone ? (
+              <Link to="/collection/" className="btn btn-sm btn-primary">
+                컬렉션으로 가기
+              </Link>
+            ) : undefined
+          }
         />
       );
     }
@@ -123,17 +153,19 @@ export default function Planner() {
             홈에서 여행 조건을 입력해 AI 코스를 만들어보세요.
           </p>
         </div>
-        <Link to="/" className="btn btn-primary btn-sm">
+        <Link to="/" className="btn btn-sm btn-primary">
           홈으로 가기
         </Link>
       </div>
     );
   }
 
-  // 소유 코스 판정 = 로그인 + courseId 존재 + (이 세션에서 저장했거나 `/planner/:courseId` 진입).
-  // 제목 인라인 편집(GBC015)의 노출 조건과 같은 기준이다.
+  // 소유 코스 판정 = 로그인 + courseId 존재 + (스토어가 아는 소유 여부 || 이 세션에서 저장 ||
+  // `/planner/:courseId` 진입). 제목 인라인 편집(GBC015)의 노출 조건과 같은 기준이다.
   const owned =
-    isAuthenticated && storeCourseId != null && (saved || Boolean(courseIdParam));
+    isAuthenticated &&
+    storeCourseId != null &&
+    (storeOwned || saved || Boolean(courseIdParam));
 
   // 저장 버튼 하나가 코스 상태에 따라 두 역할을 겸한다:
   //  - 미소유(게스트·미저장): 소유권 이전(GBC016). 비로그인이면 로그인 게이트를 열고 복귀 후 자동 저장.
@@ -174,12 +206,12 @@ export default function Planner() {
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="btn btn-sm btn-outline gap-1"
+          className="btn gap-1 btn-outline btn-sm"
           onClick={onSave}
           disabled={savePending || saveDone}
         >
           {savePending ? (
-            <span className="loading loading-spinner loading-xs" />
+            <span className="loading loading-xs loading-spinner" />
           ) : (
             <Bookmark size={16} />
           )}
@@ -187,12 +219,12 @@ export default function Planner() {
         </button>
         <button
           type="button"
-          className="btn btn-sm btn-primary gap-1"
+          className="btn gap-1 btn-sm btn-primary"
           onClick={onShare}
           disabled={sharing}
         >
           {sharing ? (
-            <span className="loading loading-spinner loading-xs" />
+            <span className="loading loading-xs loading-spinner" />
           ) : (
             <Share2 size={16} />
           )}
@@ -232,7 +264,7 @@ export default function Planner() {
     /* 모바일: 세그먼트 탭 (결과 · 코스 N · 예산) */
     <div className="flex flex-col gap-4">
       {summary}
-      <div role="tablist" className="tabs tabs-box grid grid-cols-3">
+      <div role="tablist" className="tabs-box tabs grid grid-cols-3">
         {(
           [
             ['results', '결과'],
