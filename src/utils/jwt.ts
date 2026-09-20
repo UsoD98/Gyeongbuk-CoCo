@@ -9,9 +9,17 @@
  *    (실제 권한은 매 요청마다 서버가 토큰 서명으로 다시 확인한다).
  */
 
+/**
+ * 로그인 경로. 백엔드가 accessToken `provider` 클레임으로 내려준다.
+ * 대소문자가 섞여 올 수 있어(`KAKAO`·`Kakao`) 읽는 쪽에서 소문자로 정규화한다.
+ */
+export type LoginProvider = 'default' | 'kakao';
+
 export interface JwtPayload {
   /** 로그인 사용자 id. 백엔드 미반영 구버전 토큰에는 없다(undefined). */
   userId?: number | string;
+  /** 로그인 경로('default'·'kakao'). 백엔드 미반영 구버전 토큰에는 없다. */
+  provider?: string;
   role?: string;
   /** 백엔드 JWT의 subject = email. */
   sub?: string;
@@ -62,4 +70,23 @@ export function readUserIdFromToken(token: string | null): number | null {
 
   const parsed = Number(claim);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * accessToken에서 로그인 경로(provider)를 꺼낸다.
+ * 클레임이 없는 구버전 토큰이거나 모르는 값이면 null — 호출부는 이 경우
+ * "자체 로그인"과 같게(= 비밀번호를 가진 계정으로) 다룬다.
+ */
+export function readProviderFromToken(
+  token: string | null,
+): LoginProvider | null {
+  if (!token) return null;
+
+  const claim = decodeJwtPayload(token)?.provider;
+  if (typeof claim !== 'string') return null;
+
+  const normalized = claim.trim().toLowerCase();
+  return normalized === 'kakao' || normalized === 'default'
+    ? normalized
+    : null;
 }

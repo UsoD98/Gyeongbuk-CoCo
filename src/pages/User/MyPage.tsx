@@ -8,12 +8,19 @@ import DangerZone from '@/components/user/DangerZone.tsx';
 import NicknameForm from '@/components/user/NicknameForm.tsx';
 import PasswordForm from '@/components/user/PasswordForm.tsx';
 import { MISSING_USER_ID_MESSAGE, useUser } from '@/hooks/useUser.ts';
-import { useAuthStore } from '@/stores/authStore.ts';
+import {
+  selectCanChangePassword,
+  useAuthStore,
+} from '@/stores/authStore.ts';
 import { toast } from '@/stores/toastStore.ts';
 
 /**
  * 마이페이지 — 닉네임 수정(GBC007)·비밀번호 변경(GBC008)·탈퇴(GBC009) 세 가지만 둔다.
  * 라우트는 `RequireAuth` 안에 있다.
+ *
+ * 비밀번호 변경은 **자체 로그인 계정에만** 보인다 — 카카오 계정은 우리 쪽에 비밀번호가
+ * 없어 GBC008을 부를 수 없기 때문. 판단 기준은 accessToken의 `provider` 클레임이다
+ * (`selectCanChangePassword`).
  *
  * 회원 정보 조회(GBC006)는 화면에 카드로 보여 주지 않지만 계속 부른다 — 닉네임 입력의
  * 현재값(그리고 탈퇴 확인 문구의 계정 이름)이 서버 값이어야 하기 때문이다.
@@ -26,6 +33,7 @@ export default function MyPage() {
   const navigate = useNavigate();
   const userId = useAuthStore((state) => state.userId);
   const clearAuth = useAuthStore((state) => state.clear);
+  const canChangePassword = useAuthStore(selectCanChangePassword);
   const { data, loading, error, reload } = useUser();
 
   /** 인증을 비우고 로그인 화면으로. 비밀번호 변경 후·userId 부재 시 공통 경로. */
@@ -45,7 +53,9 @@ export default function MyPage() {
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-base-content">마이페이지</h1>
         <p className="text-sm text-base-content/60">
-          닉네임과 비밀번호를 바꾸거나 계정을 정리할 수 있어요.
+          {canChangePassword
+            ? '닉네임과 비밀번호를 바꾸거나 계정을 정리할 수 있어요.'
+            : '닉네임을 바꾸거나 계정을 정리할 수 있어요.'}
         </p>
       </header>
 
@@ -63,7 +73,9 @@ export default function MyPage() {
           {loading && !data && (
             <div className="flex flex-col gap-6" aria-hidden="true">
               <Skeleton className="h-48 w-full rounded-2xl" />
-              <Skeleton className="h-80 w-full rounded-2xl" />
+              {canChangePassword && (
+                <Skeleton className="h-80 w-full rounded-2xl" />
+              )}
               <Skeleton className="h-40 w-full rounded-2xl" />
             </div>
           )}
@@ -87,13 +99,15 @@ export default function MyPage() {
                 currentNickname={data.nickname}
                 onUpdated={reload}
               />
-              <PasswordForm
-                onChanged={() =>
-                  void signOutTo(
-                    '비밀번호를 변경했어요. 새 비밀번호로 다시 로그인해 주세요.',
-                  )
-                }
-              />
+              {canChangePassword && (
+                <PasswordForm
+                  onChanged={() =>
+                    void signOutTo(
+                      '비밀번호를 변경했어요. 새 비밀번호로 다시 로그인해 주세요.',
+                    )
+                  }
+                />
+              )}
               <DangerZone nickname={data.nickname} />
             </>
           )}
