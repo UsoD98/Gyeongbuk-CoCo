@@ -75,6 +75,9 @@ export function useCourseSave({
       try {
         await assignCourse(id);
         setSaved(true);
+        // 주인 없던 코스가 내 코스가 됐다 — 새로고침 뒤에도 그 사실이 남아야 저장 버튼이
+        // '변경 저장'(GBC020)으로 붙고, 다시 assign 을 시도해 403 을 맞지 않는다.
+        usePlannerStore.getState().markOwned();
         toast.success('컬렉션에 저장했어요');
         onAssigned?.();
       } catch (error) {
